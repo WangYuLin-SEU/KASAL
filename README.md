@@ -53,6 +53,7 @@ Furthermore, KASAL provides a **visual representation** of these symmetry axes, 
 <div style="text-align: center; ">
   <img src="/datasets/result-p20-1.png" alt="">
 </div>
+
 In the visualization of **symmetry axis directions** and the **rotation center**, KASAL places the **arrow’s starting point at the rotation center** and aligns its **direction with the symmetry axis**.  
 
 For the visualization of **symmetry axis order**, KASAL first generates a **set of transformation matrices** that satisfy the specified rotational symmetry. It then applies these matrices to **recolor the object’s vertices** accordingly.
