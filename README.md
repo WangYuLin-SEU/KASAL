@@ -1,7 +1,7 @@
 
-<div style="text-align: center;">
+<p align="center">
   <img src="/datasets/icon_md.png" alt="">
-</div>
+</p>
 
 
 # <img src="/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
