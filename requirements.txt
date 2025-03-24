@@ -1,0 +1,16 @@
+imageio
+pypng
+pytz
+open3d
+tqdm
+chardet
+trimesh
+glfw
+pywin32
+fpsample==0.3.1
+polyscope==2.3.0
+numpy==1.25.2
+opencv-python==4.5.5.64
+opencv-contrib-python==4.5.5.64
+pymeshlab==2023.12.post1
+scipy==1.10.1
