@@ -3,6 +3,8 @@
   <img src="/kasal/datasets/icon_md.png" alt="">
 </p>
 
+[![PyPI](https://img.shields.io/pypi/v/kasal-6d)](https://pypi.org/project/kasal-6d/)
+[![Downloads](https://static.pepy.tech/badge/kasal-6d)](https://pepy.tech/project/kasal-6d)
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 
