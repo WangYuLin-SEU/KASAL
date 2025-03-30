@@ -4,6 +4,9 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/kasal-6d/">
+    <img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version">
+  </a>
   <a href="https://pepy.tech/project/kasal-6d">
     <img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads">
   </a>
