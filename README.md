@@ -10,6 +10,9 @@
   <a href="https://pepy.tech/project/kasal-6d">
     <img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads">
   </a>
+  <a href="https://github.com/WangYuLin-SEU/KASAL/releases/">
+    <img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=blue" alt="GitHub Releases Downloads">
+  </a>
 </p>
 
 </div>
