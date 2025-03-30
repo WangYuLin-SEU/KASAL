@@ -4,11 +4,11 @@
 import fpsample, trimesh
 import numpy as np
 from scipy import spatial
-from symmetry_lab.symmetry_axis_template import clear_sym
-from utils.load_stp import stp2info, axis_num
-from geometry.o3d_icp import refine_center_direction
-from keyaxis.keyaxis import cal_KA1, cal_KA2
-from keyaxis.rotate import rotate_translate
+from kasal.symmetry_lab.symmetry_axis_template import clear_sym
+from kasal.utils.load_stp import stp2info, axis_num
+from kasal.geometry.o3d_icp import refine_center_direction
+from kasal.keyaxis.keyaxis import cal_KA1, cal_KA2
+from kasal.keyaxis.rotate import rotate_translate
 
 def cal_model_sym(model_i_, step_path = None, sym_op = None, sym_aware = False, op = 'pts', sample_num = 10001, fpsample_num = 1500, icp_op = True, xyz_op = None):
     """ Compute the rotational symmetry of an object.  

@@ -4,13 +4,13 @@
 </p>
 
 
-# <img src="/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
+# <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 
 The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
 ***
 KASAL is a project designed for determining the symmetry axis orientation and the rotation center of rotationally symmetric objects. When using KASAL, users need to specify one of the eight predefined rotational symmetry types. Based on the selected type, KASAL identifies all symmetry axes on the given object model. Upon completion of symmetry axis localization, KASAL automatically saves the rotational symmetry information in the [BOP format](https://bop.felk.cvut.cz/ "BOP Website"). This structured symmetry information facilitates seamless integration with 6D pose estimation methods that support the BOP format. Moreover, the extracted symmetry data is beneficial for various applications, including 3D reconstruction, object recognition, and related computer vision tasks.
 
-### <img src="/datasets/K16.png" width="28">  Datasets
+### <img src="/kasal/datasets/K16.png" width="28">  Datasets
 *** 
 To identify which objects exhibit rotational symmetry, you can download the DSRSTO dataset provided with KASAL. Additionally, we have utilized KASAL to determine the symmetry axes of objects in the Google Scanned Objects (GSO) and ShapeNet datasets.
 
@@ -21,18 +21,34 @@ Below are the links to these three datasets:
 * ShapeNet: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
 
 
-### <img src="/datasets/K9.png" width="28">  Installation
+### <img src="/kasal/datasets/K9.png" width="28">  Installation
 *** 
-* Requirements: Windows 10, Anaconda 3, MeshLab
-* Installation Commands
+* **Requirements**: Windows 10, Anaconda 3, MeshLab
+* **Install via PyPI**
+
+KASAL is now available on **PyPI**, you can install it directly using:
+``````
+    pip install kasal-6d
+``````
+* **Manual Installation**
+
+If you want to install KASAL manually, use the following commands:
 ``````
     conda create -n kasal python=3.10
     conda activate kasal
-    pip install -r requirements.txt
+    pip install -r requirements.txt # Only needed for manual installation
 ``````
+* **Quick Start**
 
+After installation, you can quickly test KASAL by running the following demo scripts:
+``````
+    python demo_texture_meshes.py  
+    # or    
+    python demo_shape_meshes.py
+``````
+This will launch the KASAL application and process the example dataset.
 
-### <img src="/datasets/K10.png" width="28">  Rotational Symmetry Types
+### <img src="/kasal/datasets/K10.png" width="28">  Rotational Symmetry Types
 ***
 KASAL supports a total of eight rotational symmetry types, which include three continuous rotational symmetries and five discrete rotational symmetries.
 
@@ -44,7 +60,7 @@ In KASAL, you can select any rotational symmetry type from the **"Symmetry Type"
 
 Additionally, for **The n-fold Prismatic Rotational Symmetry** and **The n-fold Pyramidal Rotational Symmetry**, users must specify the order of rotational symmetry, denoted as *n*.
 
-### <img src="/datasets/K11.png" width="28">  Symmetry Axis Localization Results
+### <img src="/kasal/datasets/K11.png" width="28">  Symmetry Axis Localization Results
 ***
 Given a **regular dodecahedron** and its specified rotational symmetry type, KASAL can accurately determine the **orientations of all symmetry axes** and the **rotation center** on the object model.  
 
@@ -62,7 +78,7 @@ For the visualization of **symmetry axis order**, KASAL first generates a **set 
   <img src="/datasets/result-p20-2.png" alt="">
 </div>
 
-### <img src="/datasets/K12.png" width="28">  Batch Processing
+### <img src="/kasal/datasets/K12.png" width="28">  Batch Processing
 *** 
 Given a directory path (e.g., `mesh_path`), KASAL will automatically load all 3D model files from the subfolders within this directory. You then need to manually specify each model's **symmetry type**, **order (if applicable)**, and whether it exhibits **texture rotational symmetry**.  
 
@@ -81,14 +97,14 @@ app(mesh_path)
 
 ``````
 
-### <img src="/datasets/K13.png" width="28">  Texture Rotational Symmetry
+### <img src="/kasal/datasets/K13.png" width="28">  Texture Rotational Symmetry
 ***
 In real-world scenarios, most rotationally symmetric objects exhibit **geometric rotational symmetry**, while a smaller number of objects possess **texture rotational symmetry**.  
 
 By default, KASAL employs a **geometry-based symmetry axis localization mode**. If an object exhibits texture rotational symmetry, users need to manually enable the **"ADI-C"** option.
 
 
-### <img src="/datasets/K14.png" width="28">  Assisted Localization
+### <img src="/kasal/datasets/K14.png" width="28">  Assisted Localization
 ***
 KASAL performs well for most objects, but it may encounter errors when handling **imperfect or approximately rotationally symmetric objects**.  
 
@@ -100,7 +116,7 @@ The **primary key axis** refers to the symmetry axis with the **highest order** 
   <img src="/datasets/show xyz.png" alt="">
 </div>
 
-### <img src="/datasets/K15.png" width="28">  Citation
+### <img src="/kasal/datasets/K15.png" width="28">  Citation
 ***
 If you find our work useful, please cite it as follows: 
 ```bibtex

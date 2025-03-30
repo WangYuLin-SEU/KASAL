@@ -6,9 +6,9 @@
 import math
 import numpy as np
 
-from bop_toolkit_lib import transform
-from bop_toolkit_lib import inout
-from bop_toolkit_lib import misc
+from kasal.bop_toolkit_lib import transform
+from kasal.bop_toolkit_lib import inout
+from kasal.bop_toolkit_lib import misc
 
 
 def fibonacci_sampling(n_pts, radius=1.0):

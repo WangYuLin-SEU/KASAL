@@ -3,11 +3,11 @@
 
 import numpy as np
 from tqdm import tqdm
-from keyaxis.rotate import rotate_translate
-from geometry.circular_sampling import circular_sampling
-from keyaxis.color_error import rot_axis_color_error
-from bop_toolkit_lib.view_sampler import fibonacci_sampling
-from bop_toolkit_lib.transform import euler_matrix
+from kasal.keyaxis.rotate import rotate_translate
+from kasal.geometry.circular_sampling import circular_sampling
+from kasal.keyaxis.color_error import rot_axis_color_error
+from kasal.bop_toolkit_lib.view_sampler import fibonacci_sampling
+from kasal.bop_toolkit_lib.transform import euler_matrix
 
 
 def cal_KA1(pts, colors, diameter, div = 2, center_ch=None, sample_num=20001, half_sphere = True, op = 'pts', xyz_op=None):

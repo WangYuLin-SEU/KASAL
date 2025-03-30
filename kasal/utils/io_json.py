@@ -2,7 +2,7 @@
 # School of Mechanical Engineering, Southeast University, China
 
 import os, json
-import config.config as config
+import kasal.config.config as config
 
 def load_json2dict(path):
     

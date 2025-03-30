@@ -9,7 +9,7 @@ import numpy as np
 import imageio
 import png
 import json
-from bop_toolkit_lib import misc
+from kasal.bop_toolkit_lib import misc
 
 def load_im(path):
   """Loads an image from a file.

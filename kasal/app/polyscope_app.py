@@ -3,17 +3,17 @@
 
 import os, cv2, win32gui, win32con, win32api
 import numpy as np
-import config.config as config
+import kasal.config.config as config
 # from config.config import is_true2, is_true3, ui_int, ui_options, ui_options_selected, \
 #     ui_xyz_options, ui_xyz_options_selected, files_name_list, current_file_id, \
 #         psm_list, uv_texture_size, ui_int_upper, targetfacenum, sample_num, current_obj_info, \
 #             arrow_ratio, save_2_fold_a, close_ADI_c, start_id_json_file
-from utils.io_json import load_json2dict, save_symmetry_type, load_symmetry_type, get_all_ply_obj
-from utils.load_obj import OBJ
-from utils.io_ply import save_ply_model, load_ply_model
-from symmetry_lab.symmetry_axis_template import get_sym_axis_temp
-from symmetry_lab.symmetry_axis_localization import cal_model_sym
-from datasets.datasets_path import arrow_xyz_path, icon_path
+from kasal.utils.io_json import load_json2dict, save_symmetry_type, load_symmetry_type, get_all_ply_obj
+from kasal.utils.load_obj import OBJ
+from kasal.utils.io_ply import save_ply_model, load_ply_model
+from kasal.symmetry_lab.symmetry_axis_template import get_sym_axis_temp
+from kasal.symmetry_lab.symmetry_axis_localization import cal_model_sym
+from kasal.datasets.datasets_path import arrow_xyz_path, icon_path
 
 import pymeshlab as ml
 import polyscope

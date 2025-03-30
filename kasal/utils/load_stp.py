@@ -4,7 +4,7 @@
 import chardet
 import numpy as np
 from scipy import spatial
-from keyaxis.rotate import rotate_translate
+from kasal.keyaxis.rotate import rotate_translate
 
 
 def stp2info(step_path):

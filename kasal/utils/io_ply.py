@@ -4,9 +4,9 @@
 import copy
 import numpy as np
 import pymeshlab as ml
-from bop_toolkit_lib import inout, misc
-import config.config as config
-from datasets.datasets_path import arrow_path
+from kasal.bop_toolkit_lib import inout, misc
+import kasal.config.config as config
+from kasal.datasets.datasets_path import arrow_path
 
 
 def simplify_3DModel_v2(input_file = '', targetfacenum = 20000, color_op = True):
