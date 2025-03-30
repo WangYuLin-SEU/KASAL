@@ -11,11 +11,9 @@
     <img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads">
   </a>
   <a href="https://github.com/WangYuLin-SEU/KASAL/releases/">
-    <img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=blue" alt="GitHub Releases Downloads">
+    <img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases Downloads">
   </a>
 </p>
-[![GitHub release download size](https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/latest/total.svg)](https://github.com/WangYuLin-SEU/KASAL/releases)
-</div>
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 
