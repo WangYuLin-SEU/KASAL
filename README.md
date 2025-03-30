@@ -1,8 +1,18 @@
 
 <p align="center">
-  <img src="/datasets/icon_md.png" alt="">
+  <img src="/kasal/datasets/icon_md.png" alt="">
 </p>
 
+<p align="center">
+  <a href="https://pypi.org/project/kasal-6d/">
+    <img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version">
+  </a>
+  <a href="https://pepy.tech/project/kasal-6d">
+    <img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads">
+  </a>
+</p>
+
+</div>
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 
@@ -53,7 +63,7 @@ This will launch the KASAL application and process the example dataset.
 KASAL supports a total of eight rotational symmetry types, which include three continuous rotational symmetries and five discrete rotational symmetries.
 
 <div style="text-align: center;">
-  <img src="/datasets/fig1.png" alt="">
+  <img src="/kasal/datasets/fig1.png" alt="">
 </div>
 
 In KASAL, you can select any rotational symmetry type from the **"Symmetry Type"** dropdown menu and then click **"Cal Current Obj"** to localize the symmetry axes on the object.  
@@ -67,7 +77,7 @@ Given a **regular dodecahedron** and its specified rotational symmetry type, KAS
 Furthermore, KASAL provides a **visual representation** of these symmetry axes, including their **directions, orders, and the rotation center**.
 
 <div style="text-align: center; ">
-  <img src="/datasets/result-p20-1.png" alt="">
+  <img src="/kasal/datasets/result-p20-1.png" alt="">
 </div>
 
 In the visualization of **symmetry axis directions** and the **rotation center**, KASAL places the **arrow’s starting point at the rotation center** and aligns its **direction with the symmetry axis**.  
@@ -75,7 +85,7 @@ In the visualization of **symmetry axis directions** and the **rotation center**
 For the visualization of **symmetry axis order**, KASAL first generates a **set of transformation matrices** that satisfy the specified rotational symmetry. It then applies these matrices to **recolor the object’s vertices** accordingly.
 
 <div style="text-align: center; ">
-  <img src="/datasets/result-p20-2.png" alt="">
+  <img src="/kasal/datasets/result-p20-2.png" alt="">
 </div>
 
 ### <img src="/kasal/datasets/K12.png" width="28">  Batch Processing
@@ -113,7 +123,7 @@ If KASAL fails to correctly localize the symmetry axes, you can enable **"show x
 The **primary key axis** refers to the symmetry axis with the **highest order** on the object.
 
 <div style="text-align: center; ">
-  <img src="/datasets/show xyz.png" alt="">
+  <img src="/kasal/datasets/show xyz.png" alt="">
 </div>
 
 ### <img src="/kasal/datasets/K15.png" width="28">  Citation
