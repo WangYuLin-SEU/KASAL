@@ -17,6 +17,7 @@
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 Tags: rotational symmetry; rotation; symmetry axis; pose estimation; 6Dof; BOP Challenge;
+
 The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
 ***
 KASAL is a project designed for determining the symmetry axis orientation and the rotation center of rotationally symmetric objects. When using KASAL, users need to specify one of the eight predefined rotational symmetry types. Based on the selected type, KASAL identifies all symmetry axes on the given object model. Upon completion of symmetry axis localization, KASAL automatically saves the rotational symmetry information in the [BOP format](https://bop.felk.cvut.cz/ "BOP Website"). This structured symmetry information facilitates seamless integration with 6D pose estimation methods that support the BOP format. Moreover, the extracted symmetry data is beneficial for various applications, including 3D reconstruction, object recognition, and related computer vision tasks.
