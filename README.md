@@ -16,7 +16,6 @@
 </p>
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
-Tags: rotational symmetry; rotation; symmetry axis; pose estimation; 6DoF; BOP Challenge;
 
 The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
 ***
