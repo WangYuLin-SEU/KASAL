@@ -100,7 +100,7 @@ Additionally, KASAL automatically saves the specified rotational symmetry inform
 If there is only **one object** in the directory, clicking **"Cal Current Obj"** or **"Cal All Objs"** will complete the symmetry axis localization and automatically save the specified symmetry information.
 
 ``````
-from app.polyscope_app import app
+from kasal.app.polyscope_app import app
 
 mesh_path = 'The directory of your 3D model dataset'
 
@@ -141,3 +141,4 @@ If you find our work useful, please cite it as follows:
   doi    = {10.1109/TIP.2024.3515801}
 }
 ```
+
