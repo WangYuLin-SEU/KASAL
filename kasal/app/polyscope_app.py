@@ -1,7 +1,11 @@
 # Author: Yulin Wang (yulinwang@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
-
-import os, cv2, win32gui, win32con, win32api
+try:
+    import win32gui, win32con, win32api
+    ICON_SHOW = True
+except ImportError:
+    ICON_SHOW = False
+import os, cv2
 import numpy as np
 import kasal.config.config as config
 # from config.config import is_true2, is_true3, ui_int, ui_options, ui_options_selected, \
@@ -504,6 +508,7 @@ def app(models_dir, start_id = -1):
     print('id:', start_id)
     polyscope.init()
     polyscope.set_user_callback(callback)
-    set_window_icon()
+    if ICON_SHOW:
+        set_window_icon()
     run_polyscope(config.files_name_list, start_id=start_id)
     polyscope.show()
