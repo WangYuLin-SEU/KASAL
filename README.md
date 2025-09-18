@@ -17,11 +17,17 @@
 
 # <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
 
-The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
-***
+
 KASAL is a project designed for determining the symmetry axis orientation and the rotation center of rotationally symmetric objects. When using KASAL, users need to specify one of the eight predefined rotational symmetry types. Based on the selected type, KASAL identifies all symmetry axes on the given object model. Upon completion of symmetry axis localization, KASAL automatically saves the rotational symmetry information in the [BOP format](https://bop.felk.cvut.cz/ "BOP Website"). This structured symmetry information facilitates seamless integration with 6D pose estimation methods that support the BOP format. Moreover, the extracted symmetry data is beneficial for various applications, including 3D reconstruction, object recognition, and related computer vision tasks.
 
-### <img src="/kasal/datasets/K16.png" width="28">  Datasets
+### <img src="/kasal/datasets/K16.png" width="28">  News!
+***
+- **Sep 2025**: 🎉 KASAL now officially supports **Windows** and **Ubuntu (Linux)** platforms! 
+- **Mar 2025**: 🤗 KASAL has been fully **open-sourced** on GitHub and PyPI.
+- **Dec 2024**: 📄 The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
+
+
+### <img src="/kasal/datasets/K17.png" width="28">  Datasets
 *** 
 To identify which objects exhibit rotational symmetry, you can download the DSRSTO dataset provided with KASAL. Additionally, we have utilized KASAL to determine the symmetry axes of objects in the Google Scanned Objects (GSO) and ShapeNet datasets.
 
@@ -34,7 +40,12 @@ Below are the links to these three datasets:
 
 ### <img src="/kasal/datasets/K9.png" width="28">  Installation
 *** 
-* **Requirements**: Windows 10, Anaconda 3, MeshLab
+* **Platform Support**:  KASAL now supports both **Windows** and **Ubuntu (Linux)** 🎉
+| Platform | Tested Version |
+|----------|----------------|
+| Windows  | Windows 10     | 
+| Ubuntu   | 20.04+ (glibc ≥ 2.31) |
+* **Requirements**: Anaconda 3, MeshLab
 * **Install via PyPI**
 
 KASAL is now available on **PyPI**, you can install it directly using:
