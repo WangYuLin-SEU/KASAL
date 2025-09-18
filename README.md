@@ -42,10 +42,10 @@ Below are the links to these three datasets:
 *** 
 * **Platform Support**:  KASAL now supports both **Windows** and **Ubuntu (Linux)** 🎉
 
-| Platform | Tested Version |
-|----------|----------------|
-| Windows  | Windows 10     | 
-| Ubuntu   | 20.04+ (glibc ≥ 2.31) |
+>| Platform | Tested Version |
+>|----------|----------------|
+>| Windows  | Windows 10     | 
+>| Ubuntu   | 20.04+ (glibc ≥ 2.31) |
 * **Requirements**: Anaconda 3, MeshLab
 * **Install via PyPI**
 
