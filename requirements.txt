@@ -5,8 +5,7 @@ open3d
 tqdm
 chardet
 trimesh
-glfw
-pywin32
+pywin32; platform_system == "Windows"
 fpsample==0.3.1
 polyscope==2.3.0
 numpy==1.25.2
