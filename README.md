@@ -41,6 +41,7 @@ Below are the links to these three datasets:
 ### <img src="/kasal/datasets/K9.png" width="28">  Installation
 *** 
 * **Platform Support**:  KASAL now supports both **Windows** and **Ubuntu (Linux)** 🎉
+
 | Platform | Tested Version |
 |----------|----------------|
 | Windows  | Windows 10     | 
