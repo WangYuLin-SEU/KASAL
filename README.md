@@ -61,7 +61,7 @@ If you want to install KASAL manually, use the following commands:
     conda activate kasal
     pip install -r requirements.txt # Only needed for manual installation
 ``````
-> **Note**:  
+> **⚠️Note**:  
 > If you encounter compatibility issues with the default installation, you can install our recommended environment with:
 > ```
 >     pip install kasal-6d[recommended]
