@@ -6,7 +6,7 @@ tqdm
 chardet
 trimesh
 pywin32; platform_system == "Windows"
-fpsample
+fpsample==0.3.3
 polyscope
 numpy
 opencv-python
