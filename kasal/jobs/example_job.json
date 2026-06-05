@@ -1,0 +1,13 @@
+{
+  "job_version": 1,
+  "mesh_dir": "kasal/datasets/shape_meshes",
+  "defaults": {
+    "engine": "kasalv2",
+    "tex": false,
+    "only_dirty": true,
+    "mesh_preprocess": {
+      "policy": "kasalv2_strict"
+    },
+    "exports": ["sym_type_json", "sym_ply"]
+  }
+}

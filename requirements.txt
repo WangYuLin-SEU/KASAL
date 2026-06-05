@@ -1,15 +1,11 @@
-imageio
-pypng
-pytz
-open3d
-tqdm
-chardet
-trimesh
-pywin32; platform_system == "Windows"
-fpsample==0.3.3
-polyscope
-numpy
-opencv-python
-opencv-contrib-python
-pymeshlab==2023.12.post1
-scipy
+# KASAL dependencies — 4 files in requirements/
+#   base.txt, torch-cpu.txt, torch-gpu.txt, gui.txt
+#
+# Recommended:
+#   python scripts/install_deps.py full-cpu
+#   python scripts/install_deps.py full-gpu
+#
+# Plain pip example (full CPU):
+#   pip install -r requirements/base.txt -r requirements/torch-cpu.txt -r requirements/gui.txt
+#
+# See requirements/README.md and docs/install.md

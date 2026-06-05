@@ -1,94 +1,38 @@
-# Author: Yulin Wang (yulinwang@seu.edu.cn)
+# KASAL project & GitHub: Yulin Wang (王宇林, yulinwang@seu.edu.cn)
+# KASAL 项目与 GitHub：王宇林 Yulin Wang (yulinwang@seu.edu.cn)
+# KASALv2 algorithm: Mengxin Zhang (张梦欣, mx.zhang@seu.edu.cn)
+# KASALv2 算法主要设计：张梦欣 Mengxin Zhang (mx.zhang@seu.edu.cn)
+# Maintenance & pip packaging: Hu Mengting (胡梦婷, 220240361@seu.edu.cn)
+# 维护与 pip 打包：胡梦婷 Hu Mengting (220240361@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
+# 东南大学机械工程学院
 
 import copy
 import numpy as np
-import pymeshlab as ml
 from kasal.bop_toolkit_lib import inout, misc
 import kasal.config.config as config
 from kasal.datasets.datasets_path import arrow_path
-
-
-def simplify_3DModel_v2(input_file = '', targetfacenum = 20000, color_op = True):
-    """ Simplify the object model.  
-    Parameters:  
-        input_file: Path to the object model.  
-        targetfacenum: Number of faces after simplification.  
-        color_op: Whether to retain color.  
-    Returns:  
-        vertex_matrix: Vertex coordinates.  
-        vertex_color_matrix: Vertex colors.  
-        face_matrix: Face indices.  
-        vertex_normal_matrix: Vertex normals.  
-    """
-
-    mesh = ml.MeshSet()
-    mesh.load_new_mesh(input_file)
-    mesh_c = mesh.current_mesh()
-    print(mesh.current_mesh_id())
-    n1_ = mesh_c.face_number()
-    print('Number of Vertices：', mesh_c.vertex_number())
-    print('Number of Faces：', mesh_c.face_number())
-    k0_ = int(np.log(targetfacenum/n1_) / np.log(4))
-    if k0_ < 0:
-        k0_ = 0
-        
-    key_ = list(mesh_c.textures().keys())
-    if mesh_c.has_vertex_tex_coord() and len(key_) == 1:
-        mesh.compute_texcoord_transfer_vertex_to_wedge()
-        
-    for _ in range(1):
-        mesh.meshing_remove_duplicate_vertices()
-        mesh.meshing_remove_duplicate_faces()
-        mesh.meshing_repair_non_manifold_edges(method = 'Remove Faces')
-        mesh.meshing_surface_subdivision_midpoint(iterations = 4)
-        mesh_c = mesh.current_mesh()
-        print('Number of Vertices：', mesh_c.vertex_number())
-        print('Number of Faces：', mesh_c.face_number())
-        if mesh_c.has_wedge_tex_coord() and len(key_) == 1 and color_op:
-            mesh.meshing_decimation_quadric_edge_collapse_with_texture(targetfacenum=targetfacenum)
-        else:
-            mesh.meshing_decimation_quadric_edge_collapse(targetfacenum=targetfacenum, 
-                                                                preservenormal = True, 
-                                                                preserveboundary = True,
-                                                                preservetopology = True,
-                                                                autoclean = True,
-                                                                planarquadric = True,
-                                                                )
-        mesh_c = mesh.current_mesh()
-        print('Number of Vertices：', mesh_c.vertex_number())
-        print('Number of Faces：', mesh_c.face_number())
-    
-    mesh.compute_normal_for_point_clouds()
-    mesh_c = mesh.current_mesh()
-    vertex_matrix = mesh_c.vertex_matrix().copy()
-    if color_op:
-        if mesh_c.has_wedge_tex_coord():
-            mesh.transfer_texture_to_color_per_vertex()
-        vertex_color_matrix = mesh_c.vertex_color_matrix().copy()
-    else:
-        vertex_color_matrix = np.ones((vertex_matrix.shape[0], 4), dtype=np.uint8) * 255
-    face_matrix = mesh_c.face_matrix().copy()
-    vertex_normal_matrix = mesh_c.vertex_normal_matrix().copy()
-    mesh.clear()
-    return vertex_matrix.astype(np.float32), vertex_color_matrix.astype(np.float32), face_matrix.astype(np.uint32), vertex_normal_matrix.astype(np.uint32)
+from kasal.utils.io_ply_meshlab import simplify_3DModel_v2
+from kasal.utils.mesh_preprocess import load_mesh_for_analysis
 
 
 def load_ply_model(input_ply, color_op=True):
-    """ Load and simplify the object model. """
-    
+    """Load and simplify the object model (legacy entry; uses mesh_preprocess)."""
+
+    bundle = load_mesh_for_analysis(input_ply, need_colors=color_op)
+    if bundle.legacy_model:
+        return dict(bundle.legacy_model)
     model_i_ = {}
     vertices, colors, faces, normals = simplify_3DModel_v2(
-                        input_file = input_ply,
-                        targetfacenum = 40000,
-                        color_op=color_op,
-                        )
-    
-    model_i_['vertices'] = vertices
-    model_i_['colors'] = colors
-    model_i_['faces'] = faces
-    model_i_['normals'] = normals
-    model_i_['diameter'] = misc.calc_pts_diameter(vertices)
+        input_file=input_ply,
+        targetfacenum=40000,
+        color_op=color_op,
+    )
+    model_i_["vertices"] = vertices
+    model_i_["colors"] = colors
+    model_i_["faces"] = faces
+    model_i_["normals"] = normals
+    model_i_["diameter"] = misc.calc_pts_diameter(vertices)
     return model_i_
 
 def save_ply_model(model_i_, output_ply):

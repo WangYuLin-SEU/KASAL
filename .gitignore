@@ -1,0 +1,14 @@
+# Python bytecode (auto-generated at runtime)
+__pycache__/
+*.py[cod]
+
+# Local GUI / runtime state
+imgui.ini
+.polyscope.ini
+KASAL.json
+KASAL_batch.log
+*_sym.ply
+*_sym_type.json
+
+# Dev sync helper (keep local only)
+_sync_from_kasal.py

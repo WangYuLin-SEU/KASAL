@@ -1,0 +1,10 @@
+# PyTorch GPU stack (CUDA 11.8) + PyTorch3D (kasalv2 engine)
+# Windows/Linux: install pytorch3d from MiroPsota (not PyPI):
+#   https://miropsota.github.io/torch_packages_builder/pytorch3d/
+--extra-index-url https://download.pytorch.org/whl/cu118
+--extra-index-url https://miropsota.github.io/torch_packages_builder
+torch==2.4.1+cu118
+torchvision==0.19.1+cu118
+pytorch3d==0.7.8+pt2.4.1cu118
+iopath
+fvcore
