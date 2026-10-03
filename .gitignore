@@ -1,6 +1,8 @@
 # Python bytecode (auto-generated at runtime)
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.vscode/
 
 # Local GUI / runtime state
 imgui.ini

@@ -13,13 +13,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
+from kasal.bop_toolkit_lib.transform import euler_matrix
+from kasal.bop_toolkit_lib.view_sampler import fibonacci_sampling
+from kasal.geometry.transforms import rotation_about_axis
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
 from .geometry import (
     axis_from_phi_torch,
     batched_chamfer_distance,
-    build_rotation_transform,
-    euler_matrix,
-    fibonacci_sampling,
     rodrigues,
 )
 
@@ -141,7 +141,7 @@ def search_secondary_axis_at_angle(
         best_axis /= np.linalg.norm(best_axis)
 
     axis_matrices = [
-        build_rotation_transform(best_axis, k * 360.0 / div, center_ch)
+        rotation_about_axis(best_axis, k * 360.0 / div, center_ch)
         for k in range(1, div)
     ]
     axis_matrices = np.stack(axis_matrices, axis=0)

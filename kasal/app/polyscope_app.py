@@ -7,27 +7,28 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
-try:
-    import win32gui, win32con, win32api
-
-    _WIN32_ICON_AVAILABLE = True
-except ImportError:
-    _WIN32_ICON_AVAILABLE = False
-import math
-import os, sys, cv2
 import multiprocessing as mp
+import os
 import queue
-from datetime import datetime
+import sys
+
+import cv2
 import numpy as np
-import kasal.config.config as config
-# from config.config import is_true2, is_true3, ui_int, ui_options, ui_options_selected, \
-#     ui_xyz_options, ui_xyz_options_selected, files_name_list, current_file_id, \
-#         psm_list, uv_texture_size, ui_int_upper, targetfacenum, sample_num, current_obj_info, \
-#             arrow_ratio, save_2_fold_a, close_ADI_c, start_id_json_file
-from kasal.utils.io_json import load_json2dict, save_symmetry_type, load_symmetry_type, get_all_ply_obj
-from kasal.utils.load_obj import OBJ
-from kasal.utils.io_ply import save_ply_model
-from kasal.utils.annotation_state import (
+import polyscope
+import polyscope.imgui as psim
+import pymeshlab as ml
+
+import kasal.config.runtime as config
+from kasal.annotations.io import (
+    discover_annotation_meshes,
+    sidecar_sym_ply_path,
+)
+from kasal.utils.io_json import load_json, write_json
+from kasal.utils.io_obj import ObjModel
+from kasal.annotations.state import (
+    load_symmetry_type,
+    save_symmetry_type,
+    reset_current_object_ui,
     clear_all_dataset_annotations,
     count_annotation_artifacts,
     dirty_object_ids,
@@ -35,9 +36,9 @@ from kasal.utils.annotation_state import (
     initialize_dataset_dirty_state,
     mark_all_dirty,
     mark_object_dirty,
-    sync_dirty_for_current_object,
+    is_object_dirty,
 )
-from kasal.utils.io_ply_meshlab import is_pymeshlab_available
+from kasal.geometry.mesh_simplification import is_pymeshlab_available
 from kasal.utils.folder_picker import pick_dataset_folder
 from kasal.utils.linux_x11 import maximize_window_by_title, set_window_icon_by_title
 from kasal.utils.ui_font import find_cjk_ui_font_path
@@ -47,15 +48,15 @@ from kasal.device import (
     device_option_label,
     list_hardware_device_rows,
     list_torch_device_options,
-    normalize_device_id,
     resolve_torch_device,
     torch_cuda_runtime_available,
 )
 from kasal.compute.symmetry_job import (
     SymmetryJobSpec,
     apply_job_result_to_config,
+    kasalv1_job_blocked_reason,
+    symmetry_job_routing_note,
 )
-from kasal.engine_routing import engine_speed_hint, kasalv1_usage_hint
 from kasal.app.ui_strings import (
     UI_LANG_EN,
     UI_LANG_ZH,
@@ -63,15 +64,11 @@ from kasal.app.ui_strings import (
     batch_status_skip_text,
     batch_status_text,
     cleared_labels_status_text,
-    cpu_only_build_hint_text,
-    cuda_available_hint_text,
     dataset_folder_error_text,
     engine_speed_hint_text,
     gpu_install_hint_text,
     hardware_status_label,
-    hardware_table_header,
     kasalv1_block_reason_text,
-    kasalv1_usage_hint_text,
     preprocess_policy_label_text,
     preprocess_policy_option_text,
     sym_type_option_label,
@@ -81,31 +78,27 @@ from kasal.app.ui_strings import (
 from kasal.compute.symmetry_worker import mp_symmetry_worker_entry
 from kasal.utils.compute_progress import PROGRESS_POPUP_ID, apply_remote_progress, get_compute_progress
 from kasal.utils.console_io import configure_stdio_utf8
-from kasal.version_names import normalize_preprocess_policy
-from kasal.datasets.datasets_path import arrow_xyz_path, icon_path, icon_png_path
+from kasal.version_names import KASALV2_ADAPTIVE, KASALV2_STRICT, validate_preprocess_policy
+from kasal.datasets.paths import arrow_xyz_path, icon_path, icon_png_path
+
+try:
+    import win32api
+    import win32con
+    import win32gui
+
+    _WIN32_ICON_AVAILABLE = True
+except ImportError:
+    _WIN32_ICON_AVAILABLE = False
 
 ICON_SHOW = _WIN32_ICON_AVAILABLE or sys.platform.startswith("linux")
 _ICON_STANDARD_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 
-import pymeshlab as ml
-import polyscope
-import polyscope.imgui as psim
-
 polyscope.set_verbosity(0)
-polyscope.set_max_fps(33)
+polyscope.set_max_fps(config.ui_max_fps)
 polyscope.set_program_name("Key-Axis-based Symmetry Axis Localization")
 mesh = ml.MeshSet()
 _imgui_ui_font = None
 _imgui_polyscope_default_font = None
-
-_UI_FONT_BASE_PT = 15.0
-_UI_FONT_SCALE_DEFAULT = 1.2
-_UI_FONT_SCALE_MIN = 0.8
-_UI_FONT_SCALE_MAX = 1.5
-_UI_FONT_SCALE_STEP = 0.05
-
-def _find_ui_font_path():
-    return find_cjk_ui_font_path()
 
 
 def _collect_ui_cjk_probe_text() -> str:
@@ -117,9 +110,7 @@ def _collect_ui_cjk_probe_text() -> str:
     for table in (_STRINGS, _SYM_TYPE_LABELS):
         for entry in table.values():
             for text in entry.values():
-                for ch in str(text):
-                    if ord(ch) > 127:
-                        chars.add(ch)
+                chars.update(ch for ch in str(text) if ord(ch) > 127)
     return "".join(sorted(chars))
 
 
@@ -151,14 +142,14 @@ def _load_imgui_ui_font():
             "(or: python scripts/install_deps.py gui from KASAL/)"
         )
         return
-    font_path = _find_ui_font_path()
+    font_path = find_cjk_ui_font_path()
     if not font_path:
         print("[KASAL WARNING] No CJK UI font found; Chinese UI may render as question marks.")
         return
     try:
         io = psim.GetIO()
         _imgui_polyscope_default_font = io.FontDefault or psim.GetFont()
-        font = io.Fonts.AddFontFromFileTTF(font_path, _UI_FONT_BASE_PT)
+        font = io.Fonts.AddFontFromFileTTF(font_path, config.ui_font_base_pt)
         if font is not None:
             if hasattr(io.Fonts, "Build"):
                 io.Fonts.Build()
@@ -171,15 +162,13 @@ def _load_imgui_ui_font():
 
 
 def _clamp_ui_font_scale(scale: float) -> float:
-    return max(_UI_FONT_SCALE_MIN, min(_UI_FONT_SCALE_MAX, float(scale)))
+    return max(config.ui_font_scale_min, min(config.ui_font_scale_max, float(scale)))
 
 
 def _apply_ui_font_scale() -> None:
     """Apply persisted UI scale to ImGui (Polyscope 2.6 defaults FontScaleMain to ~1.5)."""
 
-    psim.GetStyle().FontScaleMain = _clamp_ui_font_scale(
-        getattr(config, "ui_font_scale", _UI_FONT_SCALE_DEFAULT)
-    )
+    psim.GetStyle().FontScaleMain = _clamp_ui_font_scale(config.ui_font_scale)
 
 
 def _apply_ui_font_for_language() -> None:
@@ -198,7 +187,7 @@ def _apply_ui_font_for_language() -> None:
 def _render_ui_font_scale_slider() -> None:
     """Setup control for global interface text scale."""
 
-    scale = _clamp_ui_font_scale(getattr(config, "ui_font_scale", _UI_FONT_SCALE_DEFAULT))
+    scale = _clamp_ui_font_scale(config.ui_font_scale)
     psim.TextUnformatted(tr("setup.font_size"))
     avail = psim.GetContentRegionAvail()
     row_w = max(float(avail[0]), 200.0)
@@ -209,8 +198,8 @@ def _render_ui_font_scale_slider() -> None:
         "##ui_font_scale",
         scale,
         0.01,
-        _UI_FONT_SCALE_MIN,
-        _UI_FONT_SCALE_MAX,
+        config.ui_font_scale_min,
+        config.ui_font_scale_max,
         "%.2f",
         psim.ImGuiSliderFlags_AlwaysClamp,
     )
@@ -218,10 +207,10 @@ def _render_ui_font_scale_slider() -> None:
     psim.SameLine()
     inc_clicked = _imgui_button("+##font_scale_inc", min_width=30.0)
     if dec_clicked:
-        scale = _clamp_ui_font_scale(scale - _UI_FONT_SCALE_STEP)
+        scale = _clamp_ui_font_scale(scale - config.ui_font_scale_step)
         changed = True
     if inc_clicked:
-        scale = _clamp_ui_font_scale(scale + _UI_FONT_SCALE_STEP)
+        scale = _clamp_ui_font_scale(scale + config.ui_font_scale_step)
         changed = True
     if changed:
         config.ui_font_scale = _clamp_ui_font_scale(scale)
@@ -231,14 +220,6 @@ def _render_ui_font_scale_slider() -> None:
 
 def _imgui_bool(result):
     return bool(result[0] if isinstance(result, tuple) else result)
-
-
-def _imgui_begin(name: str, p_open: bool, flags: int = 0) -> bool:
-    return _imgui_bool(psim.Begin(name, p_open, flags))
-
-
-def _imgui_begin_popup_modal(name: str, p_open: bool, flags: int = 0) -> bool:
-    return _imgui_bool(psim.BeginPopupModal(name, p_open, flags))
 
 
 def _imgui_selectable_selected(label: str, selected: bool = False) -> bool:
@@ -392,44 +373,6 @@ def _icon_rgba_at_standard_sizes() -> list[np.ndarray]:
     return [_icon_rgba_scaled(source, size) for size in _ICON_STANDARD_SIZES]
 
 
-def _windows_icon_load_sizes() -> list[tuple[int, int]]:
-    sizes = {
-        (
-            win32api.GetSystemMetrics(win32con.SM_CXSMICON),
-            win32api.GetSystemMetrics(win32con.SM_CYSMICON),
-        ),
-        (
-            win32api.GetSystemMetrics(win32con.SM_CXICON),
-            win32api.GetSystemMetrics(win32con.SM_CYICON),
-        ),
-    }
-    for side in _ICON_STANDARD_SIZES:
-        sizes.add((side, side))
-    return sorted(sizes)
-
-
-def _write_temp_ico_path(source: np.ndarray) -> str | None:
-    try:
-        from PIL import Image
-        import tempfile
-    except ImportError:
-        return None
-
-    pil = Image.fromarray(_icon_square_canvas(source), "RGBA")
-    handle = tempfile.NamedTemporaryFile(suffix=".ico", delete=False)
-    try:
-        pil.save(handle.name, format="ICO", sizes=_windows_icon_load_sizes())
-    except Exception:
-        handle.close()
-        try:
-            os.unlink(handle.name)
-        except OSError:
-            pass
-        return None
-    handle.close()
-    return handle.name
-
-
 def _rgba_to_glfw_image(rgba: np.ndarray) -> tuple[int, int, list]:
     height, width = rgba.shape[:2]
     pixels = [
@@ -475,46 +418,31 @@ def _set_window_icon_windows() -> bool:
     cy_lg = win32api.GetSystemMetrics(win32con.SM_CYICON)
     load_flags = win32con.LR_LOADFROMFILE
 
-    source_rgba = _load_icon_source_rgba()
-    temp_ico_path = _write_temp_ico_path(source_rgba) if source_rgba is not None else None
-    ico_load_path = temp_ico_path if temp_ico_path else icon_path
-    if not os.path.isfile(ico_load_path):
+    if not os.path.isfile(icon_path):
         print("[KASAL WARNING] Icon file not found: %s" % icon_path)
         return False
 
-    try:
-        small_icon = win32gui.LoadImage(
-            0, ico_load_path, win32con.IMAGE_ICON, cx_sm, cy_sm, load_flags
+    small_icon = win32gui.LoadImage(
+        0, icon_path, win32con.IMAGE_ICON, cx_sm, cy_sm, load_flags
+    )
+    big_icon = win32gui.LoadImage(
+        0, icon_path, win32con.IMAGE_ICON, cx_lg, cy_lg, load_flags
+    )
+    if not small_icon and not big_icon:
+        fallback = win32gui.LoadImage(
+            0, icon_path, win32con.IMAGE_ICON, 0, 0, load_flags | win32con.LR_DEFAULTSIZE
         )
-        big_icon = win32gui.LoadImage(
-            0, ico_load_path, win32con.IMAGE_ICON, cx_lg, cy_lg, load_flags
-        )
-        if not small_icon and not big_icon:
-            fallback = win32gui.LoadImage(
-                0,
-                ico_load_path,
-                win32con.IMAGE_ICON,
-                0,
-                0,
-                load_flags | win32con.LR_DEFAULTSIZE,
-            )
-            small_icon = big_icon = fallback
+        small_icon = big_icon = fallback
 
-        if not small_icon and not big_icon:
-            print("[KASAL WARNING] Failed to load icon: %s" % ico_load_path)
-            return False
+    if not small_icon and not big_icon:
+        print("[KASAL WARNING] Failed to load icon: %s" % icon_path)
+        return False
 
-        if small_icon:
-            win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, small_icon)
-        if big_icon:
-            win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, big_icon)
-        return True
-    finally:
-        if temp_ico_path:
-            try:
-                os.unlink(temp_ico_path)
-            except OSError:
-                pass
+    if small_icon:
+        win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, small_icon)
+    if big_icon:
+        win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, big_icon)
+    return True
 
 
 def _set_window_icon_linux(icon_images: list[np.ndarray]) -> bool:
@@ -544,277 +472,175 @@ def _try_apply_window_icon() -> None:
     if set_window_icon():
         _MAIN_WINDOW_ICON_PENDING = False
 
-def build_psm(m, mesh_id, input_file, transparency):
-    ''' Convert a pymeshlab variable to a polyscope variable.  
-    Parameters:  
-        m: The object model variable in pymeshlab.  
-        mesh_id: The object ID in polyscope (each object in polyscope must have a unique ID).  
-        input_file: The path to the object model.  
-        transparency: The transparency of the object in polyscope.  
-    Returns:  
-        psm: The object model variable in polyscope.  
-    '''
-    
-    is_enabled = m.is_visible()
-    if m.is_point_cloud():
-        psm = polyscope.register_point_cloud(str(mesh_id), m.transformed_vertex_matrix(), enabled=is_enabled, transparency=transparency)
+
+def _load_texture_image_or_white(texture_path: str) -> np.ndarray:
+    """Load one texture for Polyscope, falling back only when decoding fails."""
+
+    fallback = np.ones((16, 16, 3), dtype=np.uint8) * 255
+    if not os.path.exists(texture_path):
+        return fallback
+    try:
+        image = cv2.imread(texture_path)
+        if image is None:
+            raise ValueError("OpenCV returned no image data")
+        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    except Exception as exc:
+        print(f"[KASAL WARNING] Could not load texture {texture_path}: {exc}", file=sys.stderr)
+        return fallback
+
+def _register_mesh_visualization(mesh_model, mesh_id, input_file, transparency):
+    """Register a mesh or material group in Polyscope, resolving textures beside input_file."""
+
+    is_enabled = mesh_model.is_visible()
+    if mesh_model.is_point_cloud():
+        display_structure = polyscope.register_point_cloud(str(mesh_id), mesh_model.transformed_vertex_matrix(), enabled=is_enabled, transparency=transparency)
     else:
-        psm = polyscope.register_surface_mesh(str(mesh_id), m.transformed_vertex_matrix(), m.face_matrix(), enabled=is_enabled, transparency=transparency)
-    if m.has_wedge_tex_coord():
-        key_ = list(m.textures().keys())
+        display_structure = polyscope.register_surface_mesh(str(mesh_id), mesh_model.transformed_vertex_matrix(), mesh_model.face_matrix(), enabled=is_enabled, transparency=transparency)
+    if mesh_model.has_wedge_tex_coord():
         polyscope.remove_all_structures()
-        obj_ = OBJ(input_file)
-        info_ = obj_.faces_material
-        ver_uv_face_list = []
-        image_list = []
-        transparency_list = []
-        for info_key_ in info_:
-            ver_uv_face = info_[info_key_]
-            uv_path_ = os.path.join(os.path.dirname(input_file), info_key_)
-            if os.path.exists(uv_path_):
-                try:
-                    image_ = cv2.cvtColor(cv2.imread(uv_path_), cv2.COLOR_RGB2BGR)
-                    transparency_list.append(1)
-                except:
-                    image_ = np.ones((16,16,3),dtype=np.uint8) * 255
-                    image_[:, :, :] = 255
-                    transparency_list.append(1.0)
+        obj_model = ObjModel(input_file)
+        material_groups = obj_model.faces_material
+        material_faces = []
+        texture_images = []
+        for material_key in material_groups:
+            material_group = material_groups[material_key]
+            texture_path = os.path.join(os.path.dirname(input_file), material_key)
+            texture_image = _load_texture_image_or_white(texture_path)
+            material_faces.append(material_group)
+            texture_images.append(texture_image)
+        display_structure = polyscope.create_group(str(mesh_id))
+        for material_index in range(len(texture_images)):
+            resized_texture = texture_images[material_index]
+            material_group = material_faces[material_index]
+            uv_coords = np.array(material_group['uv'])
+            uv_min = np.min(uv_coords, axis=0)
+            uv_max = np.max(uv_coords, axis=0)
+            tile_min = np.array(uv_min).astype(np.int64) - 1
+            tile_max = np.array(uv_max).astype(np.int64) + 1
+            tiles_x = tile_max[0] - tile_min[0]
+            tiles_y = tile_max[1] - tile_min[1]
+            uv_coords[:, 0] = (uv_coords[:, 0] - tile_min[0]) / tiles_x
+            uv_coords[:, 1] = (uv_coords[:, 1] - tile_min[1]) / tiles_y
+            target_pixel_count = 256 * 256
+            target_height, target_width,  = resized_texture.shape[:2]
+            source_pixel_count = target_width * target_height
+            resize_ratio = np.sqrt(target_pixel_count / (source_pixel_count * tiles_x * tiles_y))
+            if resize_ratio > 1: resize_ratio = 1
+            target_width = int(target_width*resize_ratio)
+            if target_width == 0:
+                target_width = 1
+                target_height = 1
+            target_height = int(target_height*resize_ratio)
+            if target_height == 0:
+                target_width = 1
+                target_height = 1
+            resized_texture = cv2.resize(resized_texture, (target_width, target_height))
+            texture_height, texture_width = resized_texture.shape[0], resized_texture.shape[1]
+            if np.max([texture_height, texture_width]) == 1:
+                uv_min = np.min(uv_coords, axis=0)
+                uv_max = np.max(uv_coords, axis=0)
+                tile_min = np.array(uv_min).astype(np.int64) - 1
+                tile_max = np.array(uv_max).astype(np.int64) + 1
+                tiles_x = tile_max[0] - tile_min[0]
+                tiles_y = tile_max[1] - tile_min[1]
+                uv_coords[:, 0] = (uv_coords[:, 0] - tile_min[0]) / tiles_x
+                uv_coords[:, 1] = (uv_coords[:, 1] - tile_min[1]) / tiles_y
+                tiled_texture = resized_texture
             else:
-                image_ = np.ones((16,16,3),dtype=np.uint8) * 255
-                image_[:, :, :] = 255 
-                transparency_list.append(1.0)
-            ver_uv_face_list.append(ver_uv_face)
-            image_list.append(image_)
-        psm = polyscope.create_group(str(mesh_id))
-        psm_i_list = []
-        for i_ in range(len(image_list)):
-            new_image = image_list[i_]
-            ver_uv_face = ver_uv_face_list[i_]
-            uv_i_ = np.array(ver_uv_face['uv'])
-            uv_i_min = np.min(uv_i_, axis=0)
-            uv_i_max = np.max(uv_i_, axis=0)
-            uv_i_min_0 = np.array(uv_i_min).astype(np.int64) - 1
-            uv_i_max_0 = np.array(uv_i_max).astype(np.int64) + 1
-            d_x_ = uv_i_max_0[0] - uv_i_min_0[0]
-            d_y_ = uv_i_max_0[1] - uv_i_min_0[1]
-            uv_i_[:, 0] = (uv_i_[:, 0] - uv_i_min_0[0]) / d_x_
-            uv_i_[:, 1] = (uv_i_[:, 1] - uv_i_min_0[1]) / d_y_
-            static_size = 256 * 256
-            h_new_image, w_new_image,  = new_image.shape[:2]
-            new_image_size = w_new_image * h_new_image
-            resize_ratio_ = np.sqrt(static_size / (new_image_size * d_x_ * d_y_))
-            if resize_ratio_ > 1: resize_ratio_ = 1
-            w_new_image = int(w_new_image*resize_ratio_)
-            if w_new_image == 0: 
-                w_new_image = 1
-                h_new_image = 1
-            h_new_image = int(h_new_image*resize_ratio_)
-            if h_new_image == 0: 
-                w_new_image = 1
-                h_new_image = 1
-            new_image = cv2.resize(new_image, (w_new_image, h_new_image))
-            hh_, ww_ = new_image.shape[0], new_image.shape[1]
-            if np.max([hh_, ww_]) == 1:
-                uv_i_min = np.min(uv_i_, axis=0)
-                uv_i_max = np.max(uv_i_, axis=0)
-                uv_i_min_0 = np.array(uv_i_min).astype(np.int64) - 1
-                uv_i_max_0 = np.array(uv_i_max).astype(np.int64) + 1
-                d_x_ = uv_i_max_0[0] - uv_i_min_0[0]
-                d_y_ = uv_i_max_0[1] - uv_i_min_0[1]
-                uv_i_[:, 0] = (uv_i_[:, 0] - uv_i_min_0[0]) / d_x_
-                uv_i_[:, 1] = (uv_i_[:, 1] - uv_i_min_0[1]) / d_y_
-                new_image_big = new_image
-            else:
-                x_img_l = []
-                for jj_ in range(d_x_):
-                    x_img_l.append(new_image)
-                x_img_l = np.hstack(x_img_l)
-                y_img_l = []
-                for ii_ in range(d_y_):
-                    y_img_l.append(x_img_l)
-                new_image_big = np.vstack(y_img_l)
-            psm_i = polyscope.register_surface_mesh(str(mesh_id)+'_'+str(i_), 
-                                                    m.transformed_vertex_matrix(),
-                                                    np.array(ver_uv_face['faces'], dtype=np.int64), 
+                texture_row = []
+                for tile_column in range(tiles_x):
+                    texture_row.append(resized_texture)
+                texture_row = np.hstack(texture_row)
+                texture_rows = []
+                for tile_row in range(tiles_y):
+                    texture_rows.append(texture_row)
+                tiled_texture = np.vstack(texture_rows)
+            material_mesh = polyscope.register_surface_mesh(str(mesh_id)+'_'+str(material_index),
+                                                    mesh_model.transformed_vertex_matrix(),
+                                                    np.array(material_group['faces'], dtype=np.int64),
                                                     enabled=is_enabled, transparency=transparency)
-            psm_i.add_parameterization_quantity("vertex_uv_coords", np.array(uv_i_), coords_type='unit',
+            material_mesh.add_parameterization_quantity("vertex_uv_coords", np.array(uv_coords), coords_type='unit',
                                     defined_on='corners', enabled=True)
-            new_image_big = np.array(new_image_big, dtype=np.float32) / 255
-            psm_i.add_color_quantity("vertex_texture", new_image_big, 
+            tiled_texture = np.array(tiled_texture, dtype=np.float32) / 255
+            material_mesh.add_color_quantity("vertex_texture", tiled_texture,
                         defined_on='texture', param_name="vertex_uv_coords", enabled=True)
-            psm_i.add_to_group(psm)
-            psm_i_list.append(psm_i)
-        psm.set_enabled(True)
-        psm.set_hide_descendants_from_structure_lists(True)
-        psm.set_show_child_details(False)
-    elif m.has_vertex_tex_coord():
-        v_uv = m.vertex_tex_coord_matrix()
-        psm.add_parameterization_quantity("vertex_uv_coords", v_uv, defined_on='vertices', enabled=True)
-        key_ = list(m.textures().keys())
-        if len(key_) > 1:
+            material_mesh.add_to_group(display_structure)
+        display_structure.set_enabled(True)
+        display_structure.set_hide_descendants_from_structure_lists(True)
+        display_structure.set_show_child_details(False)
+    elif mesh_model.has_vertex_tex_coord():
+        vertex_uv = mesh_model.vertex_tex_coord_matrix()
+        display_structure.add_parameterization_quantity("vertex_uv_coords", vertex_uv, defined_on='vertices', enabled=True)
+        texture_names = list(mesh_model.textures().keys())
+        if len(texture_names) > 1:
             raise ValueError(' The number of textures is not equal to 1! ')
-        v_tex = cv2.cvtColor(cv2.imread(os.path.join(os.path.dirname(input_file), key_[0])), cv2.COLOR_RGB2BGR)
-        v_tex = cv2.resize(v_tex, (config.uv_texture_size, config.uv_texture_size))
-        v_tex = np.array(v_tex, dtype=np.float32) / 255
-        psm.add_color_quantity("vertex_texture", v_tex, defined_on='texture', param_name="vertex_uv_coords", enabled=True)
-    elif m.has_vertex_scalar():
-        psm.add_scalar_quantity('vertex_scalar', m.vertex_scalar_array(),enabled=True)
-    elif m.has_vertex_color():
-        vc = m.vertex_color_matrix()
-        vc = np.delete(vc, 3, 1)
-        psm.add_color_quantity('vertex_color', vc, enabled=True)
-    elif not m.is_point_cloud() and m.has_face_color() and not m.has_wedge_tex_coord():
-        fc = m.face_color_matrix()
-        fc = np.delete(fc, 3, 1)
-        psm.add_color_quantity('face_color', fc, defined_on='faces',enabled=True)
-    elif not m.is_point_cloud() and m.has_face_scalar():
-        psm.add_scalar_quantity('face_scalar', m.face_scalar_array(), defined_on='faces',enabled=True)
-    return psm   
+        vertex_texture = _load_texture_image_or_white(os.path.join(os.path.dirname(input_file), texture_names[0]))
+        vertex_texture = cv2.resize(vertex_texture, (config.uv_texture_size, config.uv_texture_size))
+        vertex_texture = np.array(vertex_texture, dtype=np.float32) / 255
+        display_structure.add_color_quantity("vertex_texture", vertex_texture, defined_on='texture', param_name="vertex_uv_coords", enabled=True)
+    elif mesh_model.has_vertex_scalar():
+        display_structure.add_scalar_quantity('vertex_scalar', mesh_model.vertex_scalar_array(),enabled=True)
+    elif mesh_model.has_vertex_color():
+        vertex_colors = mesh_model.vertex_color_matrix()
+        vertex_colors = np.delete(vertex_colors, 3, 1)
+        display_structure.add_color_quantity('vertex_color', vertex_colors, enabled=True)
+    elif not mesh_model.is_point_cloud() and mesh_model.has_face_color() and not mesh_model.has_wedge_tex_coord():
+        face_colors = mesh_model.face_color_matrix()
+        face_colors = np.delete(face_colors, 3, 1)
+        display_structure.add_color_quantity('face_color', face_colors, defined_on='faces',enabled=True)
+    elif not mesh_model.is_point_cloud() and mesh_model.has_face_scalar():
+        display_structure.add_scalar_quantity('face_scalar', mesh_model.face_scalar_array(), defined_on='faces',enabled=True)
+    return display_structure
 
-def last_object_func():
-    ''' Load the previous object. '''
-    
-    mesh.clear()
-    save_symmetry_type()
-    if config.current_file_id - 1 >= 0:
-        config.current_file_id = config.current_file_id - 1
-        input_file = config.files_name_list[config.current_file_id]
-        mesh.load_new_mesh(input_file)
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list = [mesh_id]
-        transparency_list = [1.0]
-        if config.is_true3:
-            mesh_c = mesh.current_mesh()
-            bbox = mesh_c.bounding_box()
-            center_ = bbox.center()
-            dim_0 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()]) * 1.5
-            mesh.load_new_mesh(arrow_xyz_path)
-            mesh_c = mesh.current_mesh()
-            bbox = mesh_c.bounding_box()
-            dim_1 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()])
-            mesh.compute_matrix_from_translation_rotation_scale(scalex = dim_0 / dim_1,
-                                                                scaley = dim_0 / dim_1,
-                                                                scalez = dim_0 / dim_1,
-                                                                )
-            mesh.compute_matrix_from_translation_rotation_scale(translationx = center_[0],
-                                                                translationy = center_[1],
-                                                                translationz = center_[2],
-                                                                )
-            mesh_id = mesh.current_mesh_id()
-            mesh_id_list.append(mesh_id)
-            transparency_list.append(0.3)
-        input_sym_file = os.path.join(os.path.dirname(input_file), os.path.basename(input_file).split('.')[0]+'_sym.ply')
-        if os.path.exists(input_sym_file):
-            mesh.load_new_mesh(input_sym_file)
-            mesh_id = mesh.current_mesh_id()
-            mesh_id_list.append(mesh_id)
-            transparency_list.append(1.0)
-        polyscope.remove_all_groups()
-        polyscope.remove_all_structures()
-        config.psm_list = []
-        for (m, mesh_id, transparency) in zip(mesh, mesh_id_list, transparency_list):
-            psm = build_psm(m, mesh_id, input_file, transparency)
-            config.psm_list.append(psm)
-    config.ui_options_selected = config.ui_options[0]    
-    config.ui_xyz_options_selected = config.ui_xyz_options[0]   
-    config.is_true2 = False
-    load_symmetry_type()
-
-def next_object_func():
-    ''' Load the next object. '''
-    
-    mesh.clear()
-    save_symmetry_type()
-    obj_number = len(config.files_name_list)
-    if config.current_file_id + 1 < obj_number:
-        config.current_file_id = config.current_file_id + 1
-        input_file = config.files_name_list[config.current_file_id]
-        mesh.load_new_mesh(input_file)
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list = [mesh_id]
-        transparency_list = [1.0]
-        if config.is_true3:
-            mesh_c = mesh.current_mesh()
-            bbox = mesh_c.bounding_box()
-            center_ = bbox.center()
-            dim_0 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()]) * 1.5
-            mesh.load_new_mesh(arrow_xyz_path)
-            mesh_c = mesh.current_mesh()
-            bbox = mesh_c.bounding_box()
-            dim_1 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()])
-            mesh.compute_matrix_from_translation_rotation_scale(scalex = dim_0 / dim_1,
-                                                                scaley = dim_0 / dim_1,
-                                                                scalez = dim_0 / dim_1,
-                                                                )
-            mesh.compute_matrix_from_translation_rotation_scale(translationx = center_[0],
-                                                                translationy = center_[1],
-                                                                translationz = center_[2],
-                                                                )
-            mesh_id = mesh.current_mesh_id()
-            mesh_id_list.append(mesh_id)
-            transparency_list.append(0.3)
-        input_sym_file = os.path.join(os.path.dirname(input_file), os.path.basename(input_file).split('.')[0]+'_sym.ply')
-        if os.path.exists(input_sym_file):
-            mesh.load_new_mesh(input_sym_file)
-            mesh_id = mesh.current_mesh_id()
-            mesh_id_list.append(mesh_id)
-            transparency_list.append(1.0)
-        polyscope.remove_all_groups()
-        polyscope.remove_all_structures()
-        config.psm_list = []
-        for (m, mesh_id, transparency) in zip(mesh, mesh_id_list, transparency_list):
-            psm = build_psm(m, mesh_id, input_file, transparency)
-            config.psm_list.append(psm)
-    config.ui_options_selected = config.ui_options[0]
-    config.ui_xyz_options_selected = config.ui_xyz_options[0]   
-    config.is_true2 = False
-    load_symmetry_type()
-
-def reload_object_func():
-    ''' Reload the object. When the object's symmetry axis information changes  
-        or the XYZ axis display is enabled, the object displayed in polyscope  
-        will be updated accordingly.  
-    '''
-    
-    mesh.clear()
-    load_symmetry_type()
-    input_file = config.files_name_list[config.current_file_id]
+def _display_object_mesh(input_file: str) -> None:
     mesh.load_new_mesh(input_file)
-    mesh_id = mesh.current_mesh_id()
-    mesh_id_list = [mesh_id]
+    mesh_id_list = [mesh.current_mesh_id()]
     transparency_list = [1.0]
-    if config.is_true3:
-        mesh_c = mesh.current_mesh()
-        bbox = mesh_c.bounding_box()
-        center_ = bbox.center()
-        dim_0 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()]) * 1.5
+    if config.show_coordinate_axes:
+        bbox = mesh.current_mesh().bounding_box()
+        center = bbox.center()
+        object_size = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()]) * 1.5
         mesh.load_new_mesh(arrow_xyz_path)
-        mesh_c = mesh.current_mesh()
-        bbox = mesh_c.bounding_box()
-        dim_1 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()])
-        mesh.compute_matrix_from_translation_rotation_scale(scalex = dim_0 / dim_1,
-                                                            scaley = dim_0 / dim_1,
-                                                            scalez = dim_0 / dim_1,
-                                                            )
-        mesh.compute_matrix_from_translation_rotation_scale(translationx = center_[0],
-                                                            translationy = center_[1],
-                                                            translationz = center_[2],
-                                                            )
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list.append(mesh_id)
+        bbox = mesh.current_mesh().bounding_box()
+        arrow_size = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()])
+        scale = object_size / arrow_size
+        mesh.compute_matrix_from_translation_rotation_scale(scalex=scale, scaley=scale, scalez=scale)
+        mesh.compute_matrix_from_translation_rotation_scale(
+            translationx=center[0], translationy=center[1], translationz=center[2]
+        )
+        mesh_id_list.append(mesh.current_mesh_id())
         transparency_list.append(0.3)
-    input_sym_file = os.path.join(os.path.dirname(input_file), os.path.basename(input_file).split('.')[0]+'_sym.ply')
+
+    input_sym_file = sidecar_sym_ply_path(input_file)
     if os.path.exists(input_sym_file):
         mesh.load_new_mesh(input_sym_file)
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list.append(mesh_id)
+        mesh_id_list.append(mesh.current_mesh_id())
         transparency_list.append(1.0)
+
     polyscope.remove_all_groups()
     polyscope.remove_all_structures()
-    config.psm_list = []
-    for (m, mesh_id, transparency) in zip(mesh, mesh_id_list, transparency_list):
-        psm = build_psm(m, mesh_id, input_file, transparency)
-        config.psm_list.append(psm)
+    config.displayed_meshes = []
+    for model, mesh_id, transparency in zip(mesh, mesh_id_list, transparency_list):
+        config.displayed_meshes.append(_register_mesh_visualization(model, mesh_id, input_file, transparency))
+
+
+def _navigate_object(offset: int) -> None:
+    if is_object_dirty(config.current_mesh_index):
+        save_symmetry_type()
+    target_id = config.current_mesh_index + offset
+    if 0 <= target_id < len(config.mesh_paths):
+        config.current_mesh_index = target_id
+        load_symmetry_type()
+        mesh.clear()
+        _display_object_mesh(config.mesh_paths[target_id])
+        _save_kasal_json_gui_settings()
+
+
+def _reload_current_object():
+    """Reload the selected mesh and its sidecar without changing GUI settings."""
+    mesh.clear()
+    load_symmetry_type()
+    _display_object_mesh(config.mesh_paths[config.current_mesh_index])
 
 _MAIN_WINDOW_TITLE = "Key-Axis-based Symmetry Axis Localization"
 _MAIN_WINDOW_MAXIMIZE_PENDING = True
@@ -864,7 +690,15 @@ def _push_warning_button_style() -> None:
     psim.PushStyleColor(psim.ImGuiCol_ButtonActive, (0.72, 0.58, 0.08, 1.0))
 
 
-def _pop_warning_button_style() -> None:
+def _push_danger_button_style() -> None:
+    """Destructive or interrupting actions (red)."""
+
+    psim.PushStyleColor(psim.ImGuiCol_Button, (0.75, 0.15, 0.15, 1.0))
+    psim.PushStyleColor(psim.ImGuiCol_ButtonHovered, (0.85, 0.25, 0.25, 1.0))
+    psim.PushStyleColor(psim.ImGuiCol_ButtonActive, (0.65, 0.1, 0.1, 1.0))
+
+
+def _pop_button_style() -> None:
     psim.PopStyleColor(3)
 
 
@@ -995,11 +829,11 @@ def compute_cancel_confirm_modal() -> None:
 
     pg = get_compute_progress()
     batch = config.cal_all_batch
-    if not _imgui_begin_popup_modal(
+    if not _imgui_bool(psim.BeginPopupModal(
         COMPUTE_CANCEL_CONFIRM_POPUP,
         True,
         psim.ImGuiWindowFlags_AlwaysAutoResize,
-    ):
+    )):
         return
     psim.TextUnformatted("DANGER: stop in-progress computation")
     psim.Separator()
@@ -1019,13 +853,11 @@ def compute_cancel_confirm_modal() -> None:
     if pg.object_total > 1:
         psim.TextUnformatted("Queue position: %d / %d" % (pg.object_index, pg.object_total))
     psim.Separator()
-    psim.PushStyleColor(psim.ImGuiCol_Button, (0.75, 0.15, 0.15, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonHovered, (0.85, 0.25, 0.25, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonActive, (0.65, 0.1, 0.1, 1.0))
+    _push_danger_button_style()
     if _imgui_button("Confirm stop", min_width=120.0):
         psim.CloseCurrentPopup()
         _abort_compute_worker()
-    psim.PopStyleColor(3)
+    _pop_button_style()
     psim.SameLine()
     if _imgui_button("Continue computing", min_width=150.0):
         psim.CloseCurrentPopup()
@@ -1041,7 +873,7 @@ def _render_compute_progress_modal() -> None:
 
     _center_progress_modal_on_appear()
     psim.SetNextWindowSize((_PROGRESS_MODAL_WIDTH, 0.0), psim.ImGuiCond_Always)
-    if not _imgui_begin(PROGRESS_POPUP_ID, True, _PROGRESS_MODAL_FLAGS):
+    if not _imgui_bool(psim.Begin(PROGRESS_POPUP_ID, True, _PROGRESS_MODAL_FLAGS)):
         return
 
     pct = pg.display_percent()
@@ -1066,12 +898,10 @@ def _render_compute_progress_modal() -> None:
     psim.TextUnformatted("%d%%" % pct)
     _draw_flowing_progress_bar(frac, _PROGRESS_BAR_SIZE)
     psim.Separator()
-    psim.PushStyleColor(psim.ImGuiCol_Button, (0.75, 0.15, 0.15, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonHovered, (0.85, 0.25, 0.25, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonActive, (0.65, 0.1, 0.1, 1.0))
+    _push_danger_button_style()
     if _imgui_button("Stop computation"):
         psim.OpenPopup(COMPUTE_CANCEL_CONFIRM_POPUP)
-    psim.PopStyleColor(3)
+    _pop_button_style()
     compute_cancel_confirm_modal()
     psim.End()
 
@@ -1089,8 +919,8 @@ def _cleanup_compute_worker_process() -> None:
         except Exception:
             pass
     config.compute_worker_process = None
-    config.compute_worker_thread = None
     config.compute_worker_queue = None
+    config.compute_worker_job = None
 
 
 def _drain_compute_worker_queue() -> None:
@@ -1132,14 +962,14 @@ def _ui_panel_locked() -> bool:
 
 
 def _build_symmetry_job(mesh_path: str, engine: str) -> SymmetryJobSpec:
-    tex = config.is_true2 and not config.close_ADI_c
+    tex = config.adi_color_enabled and not config.disable_color_analysis
     return SymmetryJobSpec(
         mesh_path=mesh_path,
         engine=engine,
-        sym_type=config.ui_options_selected,
-        n_fold=config.ui_int,
+        sym_type=config.selected_symmetry_type,
+        n_fold=config.selected_n_fold,
         adi_c=tex,
-        axis_xyz=config.ui_xyz_options_selected,
+        axis_xyz=config.selected_axis_constraint,
         tex=tex,
         policy=config.mesh_preprocess_policy,
         sym_type_source=config.sym_type_source,
@@ -1166,11 +996,7 @@ def _start_compute_worker(
     config.compute_worker_discard = False
     config.compute_aborted = False
     config.progress_modal_needs_center = True
-    config.compute_worker_meta = {
-        "refresh_status": refresh_status,
-        "progress_index": progress_index,
-        "progress_total": progress_total,
-    }
+    config.compute_worker_refresh_status = refresh_status
     mesh_name = os.path.basename(job.mesh_path)
 
     pg = get_compute_progress()
@@ -1183,21 +1009,15 @@ def _start_compute_worker(
 
     ctx = mp.get_context("spawn")
     progress_queue = ctx.Queue()
-    progress_meta = {
-        "mesh_name": mesh_name,
-        "progress_index": progress_index,
-        "progress_total": progress_total,
-        "engine": job.engine,
-    }
     proc = ctx.Process(
         target=mp_symmetry_worker_entry,
-        args=(job, progress_queue, progress_meta),
+        args=(job, progress_queue, progress_index, progress_total),
         name="kasal-sym-compute",
         daemon=True,
     )
     config.compute_worker_queue = progress_queue
     config.compute_worker_process = proc
-    config.compute_worker_thread = proc
+    config.compute_worker_job = job
     proc.start()
     return True
 
@@ -1215,7 +1035,7 @@ def _abort_compute_worker() -> None:
     """User confirmed stop: close UI, abort batch, discard worker output."""
 
     batch = config.cal_all_batch
-    restore_id = int(config.current_file_id)
+    restore_id = int(config.current_mesh_index)
     if batch is not None:
         restore_id = int(batch.get("restore_file_id", restore_id))
 
@@ -1230,7 +1050,7 @@ def _abort_compute_worker() -> None:
         pg.end_object(success=False)
 
     if batch is not None:
-        run_polyscope(config.files_name_list, start_id=restore_id)
+        _show_dataset_object(config.mesh_paths, start_id=restore_id)
 
     proc = config.compute_worker_process
     if proc is not None and proc.is_alive():
@@ -1246,7 +1066,7 @@ def _abort_compute_worker() -> None:
         _cleanup_compute_worker_process()
 
     _refresh_batch_status("stopped")
-    _kasal_log("Compute stopped by user (partial results not saved)")
+    _kasal_log("Compute stopped by user (interrupted writes discarded; completed files retained)")
 
 
 def _apply_compute_worker_result() -> None:
@@ -1264,8 +1084,7 @@ def _apply_compute_worker_result() -> None:
     _cleanup_compute_worker_process()
 
     pg = get_compute_progress()
-    meta = config.compute_worker_meta or {}
-    refresh_status = bool(meta.get("refresh_status", True))
+    refresh_status = config.compute_worker_refresh_status
     try:
         if exc is not None:
             pg.end_object(success=False)
@@ -1275,9 +1094,10 @@ def _apply_compute_worker_result() -> None:
             _kasal_log((result.error if result else None) or "compute failed")
         else:
             apply_job_result_to_config(job, result)
-            pg.set_stage("save", "Saving annotation files", fraction=0.96, indeterminate=False)
-            save_symmetry_type()
-            reload_object_func()
+            mark_object_dirty(config.current_mesh_index, False)
+            pg.set_stage("display", "Updating visualization", fraction=0.96, indeterminate=False)
+            mesh.clear()
+            _display_object_mesh(job.mesh_path)
             if config.cal_all_batch is None:
                 pg.end_object(success=True)
             else:
@@ -1299,22 +1119,38 @@ def _apply_compute_worker_result() -> None:
 
 def _poll_compute_worker() -> None:
     _drain_compute_worker_queue()
+    proc = config.compute_worker_process
+    if proc is not None and not proc.is_alive() and not config.compute_worker_done:
+        try:
+            proc.join(timeout=0.05)
+        except Exception:
+            pass
+        _drain_compute_worker_queue()
+        if not config.compute_worker_done and not config.compute_worker_discard:
+            job = config.compute_worker_job
+            exit_code = getattr(proc, "exitcode", None)
+            config.compute_worker_result = (
+                job,
+                None,
+                RuntimeError(f"Background symmetry worker exited without a result (exit code {exit_code})."),
+            )
+            config.compute_worker_done = True
     if config.compute_worker_done:
         _apply_compute_worker_result()
 
 
 def _queue_cal_current_async() -> None:
-    files = config.files_name_list or []
+    files = config.mesh_paths or []
     if not files:
         return
-    mesh_path = files[config.current_file_id]
+    mesh_path = files[config.current_mesh_index]
     job = _build_symmetry_job(mesh_path, config.compute_engine)
-    block = kasalv1_block_reason_text(job)
+    block = kasalv1_block_reason_text(kasalv1_job_blocked_reason(job))
     if block:
         config.ui_batch_status = block
         _kasal_log(block)
         return
-    route_note = symmetry_routing_note_text(job)
+    route_note = symmetry_routing_note_text(symmetry_job_routing_note(job))
     if route_note:
         _kasal_log(route_note)
     _start_compute_worker(
@@ -1336,7 +1172,7 @@ def cal_all_obj_sym_start() -> None:
     config.cal_all_batch = {
         "dirty_ids": dirty_ids,
         "next_idx": 0,
-        "restore_file_id": int(config.current_file_id),
+        "restore_file_id": int(config.current_mesh_index),
         "engine": config.batch_compute_engine,
         "total": len(dirty_ids),
     }
@@ -1351,7 +1187,7 @@ def _cal_all_batch_start_next() -> None:
     idx = int(batch["next_idx"])
     dirty_ids = batch["dirty_ids"]
     if idx >= len(dirty_ids):
-        run_polyscope(config.files_name_list, start_id=batch["restore_file_id"])
+        _show_dataset_object(config.mesh_paths, start_id=batch["restore_file_id"])
         engine = batch["engine"]
         config.cal_all_batch = None
         pg = get_compute_progress()
@@ -1361,7 +1197,7 @@ def _cal_all_batch_start_next() -> None:
         return
 
     start_id = dirty_ids[idx]
-    mesh_path = config.files_name_list[start_id]
+    mesh_path = config.mesh_paths[start_id]
     config.ui_batch_status = batch_status_progress_text(
         idx + 1,
         batch["total"],
@@ -1369,9 +1205,9 @@ def _cal_all_batch_start_next() -> None:
         batch["engine"],
     )
     _kasal_log(config.ui_batch_status)
-    run_polyscope(config.files_name_list, start_id=start_id)
+    _show_dataset_object(config.mesh_paths, start_id=start_id)
     job = _build_symmetry_job(mesh_path, batch["engine"])
-    block = kasalv1_block_reason_text(job)
+    block = kasalv1_block_reason_text(kasalv1_job_blocked_reason(job))
     if block:
         skip_msg = batch_status_skip_text(os.path.basename(mesh_path), block)
         config.ui_batch_status = skip_msg
@@ -1379,7 +1215,7 @@ def _cal_all_batch_start_next() -> None:
         batch["next_idx"] = idx + 1
         _cal_all_batch_start_next()
         return
-    route_note = symmetry_routing_note_text(job)
+    route_note = symmetry_routing_note_text(symmetry_job_routing_note(job))
     if route_note:
         _kasal_log(route_note)
     _start_compute_worker(
@@ -1399,38 +1235,27 @@ def _cal_all_batch_continue() -> None:
 
 
 def _kasal_log(msg: str) -> None:
-    """Log to console, stderr, and dataset KASAL_batch.log (Windows GUI may hide stdout)."""
+    """Print diagnostics to the console."""
 
     configure_stdio_utf8()
     get_compute_progress().clear_terminal()
     line = "[KASAL] " + msg
-    print(line, flush=True)
-    try:
-        print(line, file=sys.stderr, flush=True)
-    except Exception:
-        pass
-    try:
-        base = os.path.dirname(config.start_id_json_file) if config.start_id_json_file else os.getcwd()
-        log_path = os.path.join(base, "KASAL_batch.log")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), msg))
-    except Exception:
-        pass
+    print(line, file=sys.stderr, flush=True)
 
 
-def _refresh_batch_status(status_key: str, **extra) -> None:
+def _refresh_batch_status(status_key: str, engine: str | None = None) -> None:
     '''Update the localized batch-status line on the KASAL panel.
     更新 KASAL 面板上的双语批量状态行。'''
 
     dirty_n = len(dirty_object_ids())
     saved_n = len(saved_object_ids())
-    total_n = len(config.files_name_list or [])
+    total_n = len(config.mesh_paths or [])
     config.ui_batch_status = batch_status_text(
         status_key,
         saved=saved_n,
         total=total_n,
         unsaved=dirty_n,
-        **extra,
+        engine=engine,
     )
     _kasal_log(config.ui_batch_status)
 
@@ -1460,25 +1285,13 @@ _hw_device_rows_cache_key: str | None = None
 _hw_device_rows_cache: list = []
 
 
-def _reset_current_object_ui_defaults() -> None:
-    config.ui_options_selected = config.ui_options[0]
-    config.ui_xyz_options_selected = config.ui_xyz_options[0]
-    config.ui_int = 2
-    config.is_true2 = False
-    config.sym_type_source = "kasalv2_auto"
-    config.n_fold_source = "kasalv2_auto"
-    config.axis_xyz_source = "none"
-    config.current_obj_info = {}
-    config.kasalv2_snapshot = None
-
-
 def clear_all_labels_action() -> None:
     """Delete all *_sym_type.json / *_sym.ply and reset to unlabeled state."""
 
-    files = config.files_name_list or []
+    files = config.mesh_paths or []
     stats = clear_all_dataset_annotations(files)
-    _reset_current_object_ui_defaults()
-    reload_object_func()
+    reset_current_object_ui()
+    _reload_current_object()
     config.ui_batch_status = cleared_labels_status_text(
         stats["json_removed"],
         stats["ply_removed"],
@@ -1491,14 +1304,14 @@ def clear_all_labels_action() -> None:
 def clear_all_labels_confirm_modal() -> None:
     """High-risk confirmation before wiping all annotation sidecars."""
 
-    files = config.files_name_list or []
+    files = config.mesh_paths or []
     total_n = len(files)
     json_n, ply_n = count_annotation_artifacts(files)
-    if not _imgui_begin_popup_modal(
+    if not _imgui_bool(psim.BeginPopupModal(
         CLEAR_ALL_LABELS_POPUP,
         True,
         psim.ImGuiWindowFlags_AlwaysAutoResize,
-    ):
+    )):
         return
     psim.TextUnformatted("DANGER: irreversible wipe")
     psim.Separator()
@@ -1530,12 +1343,12 @@ def cal_all_confirm_modal() -> None:
     """Risk confirmation before batch Cal All."""
 
     dirty_n = len(dirty_object_ids())
-    total_n = len(config.files_name_list or [])
-    if not _imgui_begin_popup_modal(
+    total_n = len(config.mesh_paths or [])
+    if not _imgui_bool(psim.BeginPopupModal(
         CAL_ALL_CONFIRM_POPUP,
         True,
         psim.ImGuiWindowFlags_AlwaysAutoResize,
-    ):
+    )):
         return
     psim.TextUnformatted("Warning: risky batch operation")
     psim.Separator()
@@ -1544,8 +1357,8 @@ def cal_all_confirm_modal() -> None:
         "'%s' and may overwrite *_sym_type.json and *_sym.ply on disk."
         % config.batch_compute_engine
     )
-    psim.TextWrapped(engine_speed_hint(cuda_available=torch_cuda_runtime_available()))
-    psim.TextWrapped(kasalv1_usage_hint())
+    psim.TextWrapped(engine_speed_hint_text(cuda_available=torch_cuda_runtime_available()))
+    psim.TextWrapped(tr("hint.kasalv1_usage"))
     psim.TextWrapped(
         "Saved kasalv1 manual labels are skipped by default. "
         "Use 'Mark all as unsaved' only if you intend to re-run the full dataset."
@@ -1565,25 +1378,13 @@ def cal_all_confirm_modal() -> None:
         config.cal_all_run_pending = True
         config.ui_batch_status = "Cal All confirmed; starting..."
         _kasal_log("Cal All confirmed (queue %d/%d)" % (dirty_n, total_n))
-    _pop_warning_button_style()
+    _pop_button_style()
     if dirty_n == 0:
         psim.EndDisabled()
     psim.SameLine()
     if _imgui_button("Cancel", min_width=100.0):
         psim.CloseCurrentPopup()
     psim.EndPopup()
-
-
-def _resolve_dataset_start_id(models_dir: str, start_id: int) -> int:
-    if start_id != -1:
-        return int(start_id)
-    kasal_json_path = os.path.join(models_dir, "KASAL.json")
-    if os.path.exists(kasal_json_path):
-        try:
-            return int(load_json2dict(kasal_json_path)["start_id"])
-        except Exception:
-            pass
-    return 0
 
 
 def _ensure_torch_device_options(*, refresh: bool = False) -> list[TorchDeviceOption]:
@@ -1607,50 +1408,106 @@ def _selected_device_label() -> str:
     return config.torch_device_id or "(none)"
 
 
+def _apply_explicit_torch_device(device_id, source: str) -> str:
+    try:
+        selected = apply_torch_device_choice(device_id)
+    except ValueError as exc:
+        warning = f"{source}: {exc}. Using CPU instead."
+        config.device_selection_warning = warning
+        print(f"[KASAL WARNING] {warning}", file=sys.stderr)
+        return apply_torch_device_choice("cpu")
+    config.device_selection_warning = ""
+    return selected
+
+
 def _init_torch_device_selection() -> None:
     _ensure_torch_device_options(refresh=True)
     if config.torch_device_id:
-        apply_torch_device_choice(config.torch_device_id)
+        _apply_explicit_torch_device(config.torch_device_id, "Saved device selection")
         return
     env = os.environ.get("KASAL_TORCH_DEVICE", "").strip()
     if env:
-        config.torch_device_id = apply_torch_device_choice(env)
+        config.torch_device_id = _apply_explicit_torch_device(env, "KASAL_TORCH_DEVICE")
         return
     config.torch_device_id = apply_torch_device_choice(resolve_torch_device("cuda"))
 
 
-def _load_kasal_json_gui_settings(models_dir: str) -> bool:
-    """Load preprocess policy (+ optional torch device) from KASAL.json."""
+def _load_kasal_json_gui_settings(models_dir: str, start_id: int) -> int:
+    """Load GUI settings and resolve the starting object in one read."""
 
     kasal_json_path = os.path.join(models_dir, "KASAL.json")
-    if not os.path.exists(kasal_json_path):
-        return False
+    warnings = []
     try:
-        kasal_json = load_json2dict(kasal_json_path)
-    except Exception:
-        return False
+        kasal_json = load_json(kasal_json_path)
+        if not isinstance(kasal_json, dict):
+            raise ValueError("KASAL.json must contain a JSON object")
+    except FileNotFoundError:
+        kasal_json = {}
+    except (OSError, ValueError) as exc:
+        kasal_json = {}
+        warnings.append(f"Invalid KASAL.json was ignored: {exc}")
 
-    has_policy = "mesh_preprocess_policy" in kasal_json
-    if has_policy:
-        config.mesh_preprocess_policy = normalize_preprocess_policy(
-            kasal_json["mesh_preprocess_policy"]
-        )
+    if "mesh_preprocess_policy" in kasal_json:
+        raw_policy = kasal_json["mesh_preprocess_policy"]
+        try:
+            if not isinstance(raw_policy, str):
+                raise ValueError(f"expected a string, got {type(raw_policy).__name__}")
+            config.mesh_preprocess_policy = validate_preprocess_policy(raw_policy)
+        except ValueError as exc:
+            config.mesh_preprocess_policy = (
+                KASALV2_ADAPTIVE if is_pymeshlab_available() else KASALV2_STRICT
+            )
+            warnings.append(
+                f"Invalid mesh_preprocess_policy was replaced with "
+                f"{config.mesh_preprocess_policy}: {exc}"
+            )
     if "torch_device" in kasal_json:
-        apply_torch_device_choice(kasal_json["torch_device"])
+        _apply_explicit_torch_device(kasal_json["torch_device"], "Invalid saved torch_device")
+        if config.device_selection_warning:
+            warnings.append(config.device_selection_warning)
     elif not config.torch_device_id:
         _init_torch_device_selection()
-    if kasal_json.get("ui_language") in (UI_LANG_EN, UI_LANG_ZH):
-        config.ui_language = kasal_json["ui_language"]
+        if config.device_selection_warning:
+            warnings.append(config.device_selection_warning)
+    if "ui_language" in kasal_json:
+        if kasal_json["ui_language"] in (UI_LANG_EN, UI_LANG_ZH):
+            config.ui_language = kasal_json["ui_language"]
+        else:
+            warnings.append("Invalid ui_language was ignored")
     if "ui_font_scale" in kasal_json:
         try:
             config.ui_font_scale = _clamp_ui_font_scale(kasal_json["ui_font_scale"])
         except (TypeError, ValueError):
-            pass
-    return has_policy
+            warnings.append("Invalid ui_font_scale was ignored")
+    if start_id != -1:
+        resolved_start_id = int(start_id)
+    else:
+        try:
+            resolved_start_id = int(kasal_json.get("start_id", 0))
+        except (TypeError, ValueError):
+            resolved_start_id = 0
+            warnings.append("Invalid start_id was replaced with 0")
+    config.settings_load_warning = " ".join(warnings)
+    if warnings:
+        print(f"[KASAL WARNING] {config.settings_load_warning}", file=sys.stderr)
+    return resolved_start_id
 
 
-def _load_preprocess_policy_from_disk(models_dir: str) -> bool:
-    return _load_kasal_json_gui_settings(models_dir)
+def _save_kasal_json_gui_settings() -> None:
+    try:
+        kasal_json = load_json(config.settings_path)
+        if not isinstance(kasal_json, dict):
+            raise ValueError("KASAL.json must contain a JSON object")
+    except (OSError, ValueError):
+        kasal_json = {}
+    kasal_json.update({
+        "start_id": config.current_mesh_index,
+        "mesh_preprocess_policy": config.mesh_preprocess_policy,
+        "torch_device": config.torch_device_id,
+        "ui_language": config.ui_language,
+        "ui_font_scale": _clamp_ui_font_scale(config.ui_font_scale),
+    })
+    write_json(config.settings_path, kasal_json)
 
 
 def _render_torch_device_combo(combo_id: str) -> None:
@@ -1658,7 +1515,9 @@ def _render_torch_device_combo(combo_id: str) -> None:
     if not config.torch_device_id:
         _init_torch_device_selection()
     if not torch_cuda_runtime_available() and config.torch_device_id.startswith("cuda"):
-        config.torch_device_id = "cpu"
+        config.torch_device_id = _apply_explicit_torch_device(
+            config.torch_device_id, "Selected CUDA device"
+        )
     current_label = device_option_label(config.torch_device_id, options)
     changed = psim.BeginCombo(combo_id, current_label)
     if changed:
@@ -1666,6 +1525,7 @@ def _render_torch_device_combo(combo_id: str) -> None:
             selected = _imgui_selectable_selected(opt.label, config.torch_device_id == opt.device_id)
             if selected:
                 config.torch_device_id = opt.device_id
+                config.device_selection_warning = ""
         psim.EndCombo()
 
 
@@ -1686,11 +1546,11 @@ def _render_hardware_device_table(selected_device_id: str | None = None) -> None
     psim.SetColumnWidth(0, 58)
     psim.SetColumnWidth(1, 220)
 
-    _hw_table_cell(hardware_table_header("type"))
+    _hw_table_cell(tr("hw.col_type"))
     psim.NextColumn()
-    _hw_table_cell(hardware_table_header("model"))
+    _hw_table_cell(tr("hw.col_model"))
     psim.NextColumn()
-    _hw_table_cell(hardware_table_header("status"))
+    _hw_table_cell(tr("hw.col_status"))
     psim.NextColumn()
     psim.Separator()
 
@@ -1709,16 +1569,18 @@ def _render_torch_device_panel(combo_id: str) -> None:
     """Device combo plus CPU-only / hardware-GPU notices."""
 
     _render_torch_device_combo(combo_id)
+    if config.device_selection_warning:
+        psim.TextWrapped(config.device_selection_warning)
     psim.TextUnformatted(tr("setup.detected_hardware"))
     _render_hardware_device_table(config.torch_device_id)
     hint = gpu_install_hint_text()
     if hint:
         psim.TextWrapped(hint)
     elif torch_cuda_runtime_available():
-        psim.TextWrapped(cuda_available_hint_text())
+        psim.TextWrapped(tr("hint.cuda_available"))
         psim.TextWrapped(engine_speed_hint_text(cuda_available=True))
     else:
-        psim.TextWrapped(cpu_only_build_hint_text())
+        psim.TextWrapped(tr("hint.cpu_only_build"))
         psim.TextWrapped(engine_speed_hint_text(cuda_available=False))
 
 
@@ -1730,7 +1592,11 @@ def _apply_dataset_folder(models_dir: str, start_id: int = -1) -> bool:
         config.dataset_folder_error = dataset_folder_error_text("not_folder", models_dir)
         return False
 
-    files = get_all_ply_obj(models_dir)
+    try:
+        files = discover_annotation_meshes(models_dir)
+    except (OSError, ValueError) as exc:
+        config.dataset_folder_error = str(exc)
+        return False
     if not files:
         config.dataset_folder_error = dataset_folder_error_text("no_meshes", models_dir)
         return False
@@ -1739,32 +1605,44 @@ def _apply_dataset_folder(models_dir: str, start_id: int = -1) -> bool:
         config.dataset_folder_error = dataset_folder_error_text("compute_busy")
         return False
 
-    start_id = _resolve_dataset_start_id(models_dir, start_id)
-    if start_id >= len(files):
+    start_id = _load_kasal_json_gui_settings(models_dir, start_id)
+    settings_warning = config.settings_load_warning
+    if not 0 <= start_id < len(files):
         start_id = 0
+        settings_warning = " ".join(
+            filter(None, (settings_warning, "Saved start_id was outside the dataset and was replaced with 0."))
+        )
+        config.settings_load_warning = settings_warning
 
     global _kasal_side_panel_mode
-    _load_preprocess_policy_from_disk(models_dir)
     config.preprocess_modal_confirmed = False
     config.preprocess_modal_dismiss = False
     _kasal_side_panel_mode = None
 
     config.models_dir = models_dir
-    config.start_id_json_file = os.path.join(models_dir, "KASAL.json")
-    config.files_name_list = files
-    config.dataset_folder_error = ""
+    config.settings_path = os.path.join(models_dir, "KASAL.json")
+    config.mesh_paths = files
+    config.dataset_folder_error = settings_warning
     config.cal_all_batch = None
     config.cal_current_run_pending = False
     config.cal_all_run_pending = False
-    config.ui_batch_status = tr(
-        "batch.loaded_folder",
-        name=os.path.basename(models_dir) or models_dir,
-        count=len(files),
+    config.ui_batch_status = settings_warning or tr("batch.loaded_folder") % (
+        os.path.basename(models_dir) or models_dir,
+        len(files),
     )
-    initialize_dataset_dirty_state(files)
+    annotation_errors = initialize_dataset_dirty_state(files)
+    if annotation_errors:
+        annotation_warning = (
+            f"Loaded {len(files)} meshes; {len(annotation_errors)} invalid annotation sidecar(s) "
+            "were protected from batch overwrite."
+        )
+        warning = " ".join(filter(None, (settings_warning, annotation_warning)))
+        config.dataset_folder_error = warning
+        config.ui_batch_status = warning
+        _kasal_log(warning)
     print(files[start_id])
     print("id:", start_id)
-    run_polyscope(files, start_id=start_id)
+    _show_dataset_object(files, start_id=start_id)
     _kasal_log("Switched dataset folder: %s (%d objects)" % (models_dir, len(files)))
     return True
 
@@ -1787,21 +1665,9 @@ def _run_pending_dataset_folder_picker() -> None:
 def preprocess_confirm_action() -> None:
     """Apply preprocess + device choices and persist to KASAL.json."""
 
+    _apply_explicit_torch_device(config.torch_device_id, "Selected torch device")
+    _save_kasal_json_gui_settings()
     config.preprocess_modal_confirmed = True
-    apply_torch_device_choice(config.torch_device_id)
-    try:
-        kasal_json = load_json2dict(config.start_id_json_file)
-    except Exception:
-        kasal_json = {}
-    kasal_json["mesh_preprocess_policy"] = config.mesh_preprocess_policy
-    kasal_json["torch_device"] = config.torch_device_id
-    kasal_json["ui_language"] = config.ui_language
-    kasal_json["ui_font_scale"] = _clamp_ui_font_scale(
-        getattr(config, "ui_font_scale", _UI_FONT_SCALE_DEFAULT)
-    )
-    from kasal.utils.io_json import write_dict2json
-
-    write_dict2json(config.start_id_json_file, kasal_json)
     _kasal_log(
         "Preprocess confirmed: policy=%s device=%s folder=%s"
         % (config.mesh_preprocess_policy, config.torch_device_id, config.models_dir)
@@ -1812,11 +1678,11 @@ def back_to_setup_confirm_modal() -> None:
     '''Confirm leaving KASAL main panel to change folder / preprocess / device.
     确认离开 KASAL 主面板并返回设置页。'''
 
-    if not _imgui_begin_popup_modal(
+    if not _imgui_bool(psim.BeginPopupModal(
         BACK_TO_SETUP_CONFIRM_POPUP,
         True,
         psim.ImGuiWindowFlags_NoResize,
-    ):
+    )):
         return
     psim.TextUnformatted(tr("confirm_back_setup.title"))
     psim.Separator()
@@ -1827,7 +1693,7 @@ def back_to_setup_confirm_modal() -> None:
     if _imgui_button(tr("confirm_back_setup.confirm_btn"), min_width=160.0):
         psim.CloseCurrentPopup()
         _return_to_setup_panel()
-    _pop_warning_button_style()
+    _pop_button_style()
     psim.SameLine()
     if _imgui_button(tr("confirm_back_setup.cancel_btn"), min_width=100.0):
         psim.CloseCurrentPopup()
@@ -1838,11 +1704,11 @@ def preprocess_confirm_modal() -> None:
     '''Medium-risk confirmation before locking preprocess + device for this dataset.
     锁定预处理与设备前的中等风险确认弹窗。'''
 
-    if not _imgui_begin_popup_modal(
+    if not _imgui_bool(psim.BeginPopupModal(
         PREPROCESS_CONFIRM_POPUP,
         True,
         psim.ImGuiWindowFlags_NoResize,
-    ):
+    )):
         return
     psim.TextUnformatted(tr("confirm_preprocess.title"))
     psim.Separator()
@@ -1852,9 +1718,9 @@ def preprocess_confirm_modal() -> None:
     psim.TextUnformatted(tr("confirm_preprocess.dataset"))
     psim.TextWrapped(config.models_dir or tr("setup.none"))
     psim.TextUnformatted(
-        tr("confirm_preprocess.preprocess", preprocess_policy_label_text(config.mesh_preprocess_policy))
+        tr("confirm_preprocess.preprocess") % preprocess_policy_label_text(config.mesh_preprocess_policy)
     )
-    psim.TextUnformatted(tr("confirm_preprocess.device", _selected_device_label()))
+    psim.TextUnformatted(tr("confirm_preprocess.device") % _selected_device_label())
     if config.preprocess_modal_dismiss:
         psim.TextWrapped(tr("confirm_preprocess.dismiss_note"))
     psim.Separator()
@@ -1862,7 +1728,7 @@ def preprocess_confirm_modal() -> None:
     if _imgui_button(tr("confirm_preprocess.confirm_btn"), min_width=140.0):
         psim.CloseCurrentPopup()
         preprocess_confirm_action()
-    _pop_warning_button_style()
+    _pop_button_style()
     psim.SameLine()
     if _imgui_button(tr("confirm_preprocess.cancel_btn"), min_width=100.0):
         psim.CloseCurrentPopup()
@@ -1932,7 +1798,7 @@ def preprocess_setup_callback():
         )
         _center_modal_on_appear()
         psim.OpenPopup(PREPROCESS_CONFIRM_POPUP)
-    _pop_warning_button_style()
+    _pop_button_style()
     preprocess_confirm_modal()
     _pop_kasal_panel_chrome_style()
 
@@ -1954,14 +1820,14 @@ def _main_toolkit_callback() -> None:
     psim.TextUnformatted(tr("kasal.subtitle"))
     folder_label = config.models_dir or tr("setup.none")
     psim.TextWrapped(
-        tr("kasal.dataset", os.path.basename(folder_label) or folder_label)
+        tr("kasal.dataset") % (os.path.basename(folder_label) or folder_label)
     )
     if _imgui_button(tr("setup.open_folder")):
         _request_dataset_folder_picker()
     _run_pending_dataset_folder_picker()
     psim.Separator()
     psim.TextWrapped(engine_speed_hint_text(cuda_available=torch_cuda_runtime_available()))
-    psim.TextWrapped(kasalv1_usage_hint_text())
+    psim.TextWrapped(tr("hint.kasalv1_usage"))
     psim.Separator()
     psim.TextUnformatted(tr("kasal.cal_current"))
     changed_eng = psim.BeginCombo("##cal_current_eng", config.compute_engine)
@@ -1979,41 +1845,41 @@ def _main_toolkit_callback() -> None:
             if selected:
                 config.batch_compute_engine = val
         psim.EndCombo()
-    files = config.files_name_list or []
+    files = config.mesh_paths or []
     if files:
-        cal_job = _build_symmetry_job(files[config.current_file_id], config.compute_engine)
-        cal_block = kasalv1_block_reason_text(cal_job)
+        cal_job = _build_symmetry_job(files[config.current_mesh_index], config.compute_engine)
+        cal_block = kasalv1_block_reason_text(kasalv1_job_blocked_reason(cal_job))
         if cal_block:
             psim.TextWrapped(cal_block)
         else:
-            route_note = symmetry_routing_note_text(cal_job)
+            route_note = symmetry_routing_note_text(symmetry_job_routing_note(cal_job))
             if route_note:
                 psim.TextWrapped(route_note)
     dirty_n = len(dirty_object_ids())
     saved_n = len(saved_object_ids())
-    total_n = len(config.files_name_list or [])
+    total_n = len(config.mesh_paths or [])
     psim.TextUnformatted(
-        tr("kasal.sources", config.sym_type_source, config.n_fold_source)
+        tr("kasal.sources") % (config.sym_type_source, config.n_fold_source)
     )
     psim.TextUnformatted(
-        tr("kasal.saved_unsaved", saved_n, total_n, dirty_n, total_n)
+        tr("kasal.saved_unsaved") % (saved_n, total_n, dirty_n, total_n)
     )
     psim.Separator()
     psim.PushItemWidth(200)
     psim.TextUnformatted(tr("kasal.symmetry_type"))
-    psim.SameLine() 
-    changed = psim.BeginCombo(" "*1, sym_type_option_label(config.ui_options_selected))
+    psim.SameLine()
+    changed = psim.BeginCombo(" "*1, sym_type_option_label(config.selected_symmetry_type))
     if changed:
-        for val in config.ui_options:
+        for val in config.symmetry_type_options:
             selected = _imgui_selectable_selected(
                 sym_type_option_label(val),
-                config.ui_options_selected == val,
+                config.selected_symmetry_type == val,
             )
             if selected:
-                config.ui_options_selected = val
+                config.selected_symmetry_type = val
                 config.sym_type_source = "user"
                 config.n_fold_source = "user"
-                mark_object_dirty(config.current_file_id)
+                mark_object_dirty(config.current_mesh_index)
         psim.EndCombo()
     psim.PopItemWidth()
     psim.Separator()
@@ -2021,46 +1887,45 @@ def _main_toolkit_callback() -> None:
     psim.TextUnformatted(tr("kasal.n_note"))
     psim.Separator()
     psim.TextUnformatted(tr("kasal.n_fold"))
-    psim.SameLine() 
-    changed, config.ui_int = psim.InputInt(" "*2, config.ui_int, step=1, step_fast=10)
+    psim.SameLine()
+    changed, config.selected_n_fold = psim.InputInt(" "*2, config.selected_n_fold, step=1, step_fast=10)
     if changed:
         config.n_fold_source = "user"
-        mark_object_dirty(config.current_file_id)
-    psim.SameLine() 
+        mark_object_dirty(config.current_mesh_index)
+    psim.SameLine()
     psim.TextUnformatted(tr("kasal.adi_c"))
-    psim.SameLine() 
-    changed, config.is_true2 = psim.Checkbox(" "*3, config.is_true2)
+    psim.SameLine()
+    changed, config.adi_color_enabled = psim.Checkbox(" "*3, config.adi_color_enabled)
     if changed:
-        mark_object_dirty(config.current_file_id)
+        mark_object_dirty(config.current_mesh_index)
     psim.Separator()
     psim.TextUnformatted(tr("kasal.axis_xyz"))
-    psim.SameLine() 
-    changed = psim.BeginCombo(" "*4, config.ui_xyz_options_selected)
+    psim.SameLine()
+    changed = psim.BeginCombo(" "*4, config.selected_axis_constraint)
     if changed:
-        for val in config.ui_xyz_options:
-            selected_2 = _imgui_selectable_selected(val, config.ui_xyz_options_selected==val)
+        for val in config.axis_constraint_options:
+            selected_2 = _imgui_selectable_selected(val, config.selected_axis_constraint==val)
             if selected_2:
-                config.ui_xyz_options_selected = val
+                config.selected_axis_constraint = val
                 config.axis_xyz_source = "user"
-                mark_object_dirty(config.current_file_id)
+                mark_object_dirty(config.current_mesh_index)
         psim.EndCombo()
     psim.PopItemWidth()
-    psim.SameLine() 
+    psim.SameLine()
     psim.TextUnformatted(tr("kasal.show_xyz"))
-    psim.SameLine() 
-    changed, config.is_true3 = psim.Checkbox(" "*5, config.is_true3)
-    if(changed): 
-        reload_object_func()
-        pass 
+    psim.SameLine()
+    changed, config.show_coordinate_axes = psim.Checkbox(" "*5, config.show_coordinate_axes)
+    if(changed):
+        _reload_current_object()
     psim.Separator()
     if _imgui_button(tr("kasal.last_object")):
-        last_object_func()
-    psim.SameLine() 
+        _navigate_object(-1)
+    psim.SameLine()
     if _imgui_button(tr("kasal.next_object")):
-        next_object_func()
+        _navigate_object(1)
     psim.Separator()
-    cal_current_blocked = bool(files and kasalv1_block_reason_text(
-        _build_symmetry_job(files[config.current_file_id], config.compute_engine)
+    cal_current_blocked = bool(files and kasalv1_job_blocked_reason(
+        _build_symmetry_job(files[config.current_mesh_index], config.compute_engine)
     ))
     if cal_current_blocked:
         psim.BeginDisabled(True)
@@ -2080,19 +1945,17 @@ def _main_toolkit_callback() -> None:
     if _imgui_button(tr("kasal.mark_all_btn")):
         mark_all_dirty()
         _refresh_batch_status("queued_all")
-    psim.SameLine() 
+    psim.SameLine()
     if _imgui_button(tr("kasal.restore_btn")):
-        initialize_dataset_dirty_state(config.files_name_list)
+        initialize_dataset_dirty_state(config.mesh_paths)
         load_symmetry_type()
         _refresh_batch_status("restored")
     psim.Separator()
     psim.TextWrapped(tr("kasal.clear_hint"))
-    psim.PushStyleColor(psim.ImGuiCol_Button, (0.75, 0.15, 0.15, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonHovered, (0.85, 0.25, 0.25, 1.0))
-    psim.PushStyleColor(psim.ImGuiCol_ButtonActive, (0.65, 0.1, 0.1, 1.0))
+    _push_danger_button_style()
     if _imgui_button(tr("kasal.clear_btn")):
         psim.OpenPopup(CLEAR_ALL_LABELS_POPUP)
-    psim.PopStyleColor(3)
+    _pop_button_style()
     clear_all_labels_confirm_modal()
     if ui_locked:
         psim.EndDisabled()
@@ -2122,7 +1985,7 @@ def _main_toolkit_callback() -> None:
         )
         _center_modal_on_appear()
         psim.OpenPopup(BACK_TO_SETUP_CONFIRM_POPUP)
-    _pop_warning_button_style()
+    _pop_button_style()
     if ui_locked:
         psim.EndDisabled()
     back_to_setup_confirm_modal()
@@ -2144,71 +2007,16 @@ def callback():
     _main_toolkit_callback()
 
 
-def run_polyscope(files_name_list, start_id = 0):
-    ''' Use polyscope to display objects from pymeshlab.  
-    Parameters:  
-        files_name_list: A list of paths to all object models in the folder.  
-        start_id: The index of the object to start loading.  
-    '''
-    
+def _show_dataset_object(mesh_paths, start_id=0):
+    """Load annotations and display the selected dataset object."""
     mesh.clear()
-    polyscope.remove_all_groups()
-    polyscope.remove_all_structures()
-    input_file = files_name_list[start_id]
-    config.current_file_id = start_id
+    config.current_mesh_index = start_id
     load_symmetry_type()
-    mesh.load_new_mesh(input_file)
-    mesh_id = mesh.current_mesh_id()
-    mesh_id_list = [mesh_id]
-    transparency_list = [1.0]
-    if config.is_true3:
-        mesh_c = mesh.current_mesh()
-        bbox = mesh_c.bounding_box()
-        center_ = bbox.center()
-        dim_0 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()]) * 1.5
-        mesh.load_new_mesh(arrow_xyz_path)
-        mesh_c = mesh.current_mesh()
-        bbox = mesh_c.bounding_box()
-        dim_1 = np.max([bbox.dim_x(), bbox.dim_y(), bbox.dim_z()])
-        mesh.compute_matrix_from_translation_rotation_scale(scalex = dim_0 / dim_1,
-                                                            scaley = dim_0 / dim_1,
-                                                            scalez = dim_0 / dim_1,
-                                                            )
-        mesh.compute_matrix_from_translation_rotation_scale(translationx = center_[0],
-                                                            translationy = center_[1],
-                                                            translationz = center_[2],
-                                                            )
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list.append(mesh_id)
-        transparency_list.append(0.3)
-    
-    input_sym_file = os.path.join(os.path.dirname(input_file), os.path.basename(input_file).split('.')[0]+'_sym.ply')
-    if os.path.exists(input_sym_file):
-        mesh.load_new_mesh(input_sym_file)
-        mesh_id = mesh.current_mesh_id()
-        mesh_id_list.append(mesh_id)
-        transparency_list.append(1.0)
-    
-    for (m, mesh_id, transparency_) in zip(mesh, mesh_id_list, transparency_list):
-        psm = build_psm(m, mesh_id, input_file, transparency_)
-        config.psm_list.append(psm)
+    _display_object_mesh(mesh_paths[start_id])
 
 def app(models_dir, start_id = -1):
-    '''Application of symmetry axis localization.
+    """Open the annotation GUI; start_id=-1 restores the saved mesh index."""
 
-    Parameters:
-        models_dir: Folder of object models (.ply / .obj under subdirs).
-        start_id: Object index to open (-1 = read KASAL.json, else 0).
-
-    ------------------------------------------------------
-
-    对称轴定位 GUI 入口。
-
-    参数：
-        models_dir: 物体模型文件夹（递归扫描 .ply / .obj）。
-        start_id: 起始物体索引（-1 表示读 KASAL.json，否则默认 0）。
-    '''
-    
     global _MAIN_WINDOW_MAXIMIZE_PENDING, _MAIN_WINDOW_ICON_PENDING
     configure_stdio_utf8()
     _MAIN_WINDOW_MAXIMIZE_PENDING = True

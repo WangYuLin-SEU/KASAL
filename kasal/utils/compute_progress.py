@@ -14,7 +14,6 @@ from __future__ import annotations
 import sys
 import threading
 
-import kasal.config.config as config
 from kasal.utils.console_io import (
     clear_terminal_carriage_line,
     configure_stdio_utf8,
@@ -103,10 +102,6 @@ class ComputeProgress:
                 self._display_percent = max(self._display_percent, pct)
             self.indeterminate = indeterminate
         _emit_ipc_progress(self)
-
-    def display_fraction(self) -> float:
-        with self._lock:
-            return self.fraction
 
     def display_percent(self) -> int:
         """Integer percent for UI; never decreases within one compute job."""
@@ -241,5 +236,9 @@ def apply_remote_progress(data: dict) -> None:
     )
 
 
-def progress_pulse() -> None:
-    _progress.pulse()
+def report_compute_stage(key: str, label: str, *, fraction: float) -> None:
+    """Update GUI/worker progress and terminal output when reporting is active."""
+
+    if progress_reporting_enabled():
+        _progress.set_stage(key, label, fraction=fraction, indeterminate=False)
+        _progress.pulse()

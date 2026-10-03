@@ -19,12 +19,13 @@ from pathlib import Path
 KASAL_ROOT = Path(__file__).resolve().parents[1]
 REQ_DIR = KASAL_ROOT / "requirements"
 
-# Only 4 requirement files; profiles combine them.
+# Profiles combine the runtime layers and the optional test tool layer.
 PROFILES = {
     "base": ["base.txt"],
     "torch-cpu": ["torch-cpu.txt"],
     "torch-gpu": ["torch-gpu.txt"],
     "gui": ["gui.txt"],
+    "test": ["test.txt"],
     "headless-cpu": ["base.txt", "torch-cpu.txt"],
     "headless-gpu": ["base.txt", "torch-gpu.txt"],
     "cpu": ["base.txt", "torch-cpu.txt"],

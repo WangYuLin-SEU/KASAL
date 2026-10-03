@@ -11,28 +11,25 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
 
-import kasal.config.config as config
-from kasal.engine_routing import (
-    engine_routing_note,
-    kasalv1_skip_reason,
-    should_use_kasalv1_engine,
+import kasal.config.runtime as config
+from kasal.config.algorithms import (
+    DEFAULT_ANALYSIS_CONFIG,
+    DEFAULT_KASALV1_CONFIG,
+    build_analysis_config,
 )
-from kasal.kasalv2_bridge import (
-    bop_to_current_obj_info,
-    kasalv2_result_to_ui,
-    run_kasalv2_on_mesh,
+from kasal.device import resolve_torch_device
+from kasal.utils.atomic_file import atomic_output_path
+from kasal.utils.compute_progress import report_compute_stage
+from kasal.annotations.io import (
+    SymmetryAnnotationState,
+    build_symmetry_type_dict,
+    sidecar_sym_ply_path,
+    sidecar_sym_type_path,
 )
-from kasal.symmetry_lab.symmetry_axis_localization import cal_model_sym
-from kasal.symmetry_lab.symmetry_axis_template import get_sym_axis_temp
-from kasal.utils.io_json import build_symmetry_type_dict
-from kasal.utils.io_ply import save_ply_model
-from kasal.utils.compute_progress import get_compute_progress, progress_pulse, progress_reporting_enabled
-from kasal.utils.mesh_preprocess import load_mesh_for_analysis
-from kasal.viz.symmetry_visual_export import build_model_i_for_save_ply
+from kasal.utils.io_json import write_json
 from kasal.version_names import (
     KASALV1_ENGINE,
     KASALV2_ENGINE,
@@ -43,6 +40,8 @@ from kasal.version_names import (
 
 @dataclass
 class SymmetryJobSpec:
+    """Inputs for one job; tex optionally overrides the recorded adi_c setting."""
+
     mesh_path: str
     engine: str = KASALV2_ENGINE
     sym_type: str = "None"
@@ -58,6 +57,8 @@ class SymmetryJobSpec:
 
 @dataclass
 class SymmetryJobResult:
+    """Job outcome, including the actual engine and any failure message."""
+
     success: bool
     current_obj_info: dict = field(default_factory=dict)
     sym_type: str = "None"
@@ -87,6 +88,8 @@ def _kasalv1_sym_op(sym_type: str) -> str | None:
 def resolve_symmetry_job_engine(job: SymmetryJobSpec) -> str:
     """Pick kasalv1 vs kasalv2 from job fields (shared by GUI and CLI)."""
 
+    if job.axis_xyz not in (None, "None"):
+        return KASALV1_ENGINE
     unlabeled_auto = (
         job.sym_type in ("None", "")
         and job.sym_type_source not in ("user",)
@@ -101,55 +104,91 @@ def resolve_symmetry_job_engine(job: SymmetryJobSpec) -> str:
     return normalize_engine(job.engine)
 
 
-_resolve_job_engine = resolve_symmetry_job_engine
-
-
 def kasalv1_job_blocked_reason(job: SymmetryJobSpec) -> str | None:
-    """Return a block reason when kasalv1 was selected but labels are not user-set."""
+    """Return a block reason when kasalv1 has no concrete symmetry type."""
 
     engine = resolve_symmetry_job_engine(job)
-    if not should_use_kasalv1_engine(job.axis_xyz, engine):
+    if engine != KASALV1_ENGINE:
         return None
-    return kasalv1_skip_reason(job.sym_type, job.sym_type_source, job.n_fold_source)
+    if job.sym_type not in ("None", ""):
+        return None
+    return (
+        "kasalv1 requires symmetry type and n-fold set in the UI "
+        "(object is unlabeled)."
+    )
 
 
 def symmetry_job_routing_note(job: SymmetryJobSpec) -> str | None:
-    return engine_routing_note(job.engine, resolve_symmetry_job_engine(job))
+    if is_kasalv1_engine(job.engine) and resolve_symmetry_job_engine(job) == KASALV2_ENGINE:
+        return (
+            "Unlabeled object: compute will use kasalv2 "
+            "(kasalv1 requires user-set symmetry type and n-fold)."
+        )
+    return None
 
 
 def run_symmetry_job(job: SymmetryJobSpec) -> SymmetryJobResult:
-    """Run one symmetry job (preprocess → engine → export dict)."""
+    """Resolve the engine, then preprocess, analyze and export a single mesh."""
 
     tex = job.tex if job.tex is not None else job.adi_c
-    engine = _resolve_job_engine(job)
-    if should_use_kasalv1_engine(job.axis_xyz, engine):
+    engine = resolve_symmetry_job_engine(job)
+    if engine == KASALV1_ENGINE:
         return _run_kasalv1_job(job, tex=tex)
     return _run_kasalv2_job(job, tex=tex)
 
 
+def _save_ply_model_atomically(model: dict, output_path: str) -> dict:
+    """Write a visualization beside its target, then replace it as one operation."""
+
+    from kasal.utils.io_ply import save_ply_model
+
+    with atomic_output_path(output_path) as temporary:
+        return save_ply_model(
+            model, str(temporary),
+            arrow_ratio=config.arrow_ratio,
+            save_twofold_axis=config.save_twofold_axis,
+        )
+
+
 def _run_kasalv2_job(job: SymmetryJobSpec, *, tex: bool) -> SymmetryJobResult:
     try:
-        bop = run_kasalv2_on_mesh(job.mesh_path, tex=tex, policy=job.policy)
-        sym_type, n_fold = kasalv2_result_to_ui(bop)
-        current_obj_info = bop_to_current_obj_info(bop)
-        bundle = load_mesh_for_analysis(job.mesh_path, need_colors=tex, policy=job.policy)
-        model_viz = build_model_i_for_save_ply(bundle.kasalv1_model, current_obj_info, sym_type)
-        stem = os.path.basename(job.mesh_path).split(".")[0]
-        out_dir = os.path.dirname(job.mesh_path)
-        if "sym_ply" in job.exports and sym_type != "None":
-            save_ply_model(model_viz, os.path.join(out_dir, stem + "_sym.ply"))
-        state = _job_state(
-            job,
-            sym_type,
-            n_fold,
-            current_obj_info,
-            engine=KASALV2_ENGINE,
-            sources=("kasalv2_auto", "kasalv2_auto"),
-        )
-        if "sym_type_json" in job.exports:
-            from kasal.utils.io_json import write_dict2json
+        from kasal.rotational_symmetry.analyzer import analyze_rotational_symmetry
+        from kasal.rotational_symmetry.output_schema import build_analysis_result, build_model_output_json
+        from kasal.utils.mesh_preprocess import load_mesh_for_analysis
 
-            write_dict2json(os.path.join(out_dir, stem + "_sym_type.json"), build_symmetry_type_dict(state))
+        report_compute_stage("preprocess", "Loading & preprocessing mesh", fraction=0.12)
+        bundle = load_mesh_for_analysis(job.mesh_path, need_colors=tex, policy=job.policy)
+        analysis_config = build_analysis_config(
+            device=resolve_torch_device(DEFAULT_ANALYSIS_CONFIG.axis_search.device)
+        )
+        report_compute_stage(
+            "analyze", "kasalv2 symmetry analysis (CPU may take several minutes)", fraction=0.35
+        )
+        raw_result, n_fold = analyze_rotational_symmetry(bundle.model_input, tex=tex, config=analysis_config)
+        report_compute_stage("export", "Building BOP output", fraction=0.92)
+        analysis = build_analysis_result(raw_result, n_fold)
+        current_obj_info = build_model_output_json(analysis, bundle.bbox_info)
+        sym_type, n_fold = _kasalv2_result_to_ui(current_obj_info)
+        if "sym_ply" in job.exports:
+            sym_ply_path = sidecar_sym_ply_path(job.mesh_path)
+            if sym_type == "None":
+                Path(sym_ply_path).unlink(missing_ok=True)
+            else:
+                from kasal.viz.symmetry_visual_export import build_symmetry_visualization_model
+
+                model_viz = build_symmetry_visualization_model(bundle.kasalv1_model, current_obj_info, sym_type)
+                _save_ply_model_atomically(model_viz, sym_ply_path)
+        if "sym_type_json" in job.exports:
+            state = _job_state(
+                job,
+                sym_type,
+                n_fold,
+                current_obj_info,
+                engine=KASALV2_ENGINE,
+                sym_type_source="kasalv2_auto",
+                n_fold_source="kasalv2_auto",
+            )
+            write_json(sidecar_sym_type_path(job.mesh_path), build_symmetry_type_dict(state))
         return SymmetryJobResult(
             success=True,
             current_obj_info=current_obj_info,
@@ -163,60 +202,49 @@ def _run_kasalv2_job(job: SymmetryJobSpec, *, tex: bool) -> SymmetryJobResult:
 
 def _run_kasalv1_job(job: SymmetryJobSpec, *, tex: bool) -> SymmetryJobResult:
     try:
-        skip = kasalv1_skip_reason(job.sym_type, job.sym_type_source, job.n_fold_source)
+        skip = kasalv1_job_blocked_reason(job)
         if skip:
             return SymmetryJobResult(success=False, error=skip, engine_used=KASALV1_ENGINE)
-        sym_type = job.sym_type
-        sym_info_ = get_sym_axis_temp(sym_type, job.n_fold)
-        sym_op = _kasalv1_sym_op(sym_type)
-        adi_op = "colors" if tex else "pts"
-        pg = get_compute_progress()
-        if progress_reporting_enabled():
-            pg.set_stage("preprocess", "Loading mesh for kasalv1", fraction=0.15, indeterminate=False)
-            progress_pulse()
-        bundle = load_mesh_for_analysis(job.mesh_path, need_colors=tex, policy=job.policy)
-        model_i_ = dict(bundle.kasalv1_model)
-        if progress_reporting_enabled():
-            pg.set_stage(
-                "cal_sym",
-                "kasalv1 axis localization (ICP)",
-                fraction=0.45,
-                indeterminate=False,
-            )
-            progress_pulse()
-        model_i_ = cal_model_sym(
-            model_i_,
-            step_path=sym_info_,
-            sym_op=sym_op,
-            sym_aware=True,
-            op=adi_op,
-            sample_num=config.sample_num,
-            icp_op=True,
-            xyz_op=job.axis_xyz,
-        )
-        stem = os.path.basename(job.mesh_path).split(".")[0]
-        out_dir = os.path.dirname(job.mesh_path)
-        model_info_i = dict(model_i_)
-        if progress_reporting_enabled():
-            pg.set_stage("export", "Saving sym.ply / JSON", fraction=0.9, indeterminate=False)
-            progress_pulse()
-        if "sym_ply" in job.exports and sym_type != "None":
-            model_info_i = save_ply_model(model_i_, os.path.join(out_dir, stem + "_sym.ply"))
-        state = _job_state(
-            job,
-            sym_type,
-            job.n_fold,
-            model_info_i,
-            engine=KASALV1_ENGINE,
-            sources=(job.sym_type_source or "user", job.n_fold_source or "user"),
-        )
-        if "sym_type_json" in job.exports:
-            from kasal.utils.io_json import write_dict2json
+        from kasal.symmetry_lab.symmetry_axis_localization import localize_symmetry_axes
+        from kasal.symmetry_lab.symmetry_axis_template import get_symmetry_axis_template
+        from kasal.utils.mesh_preprocess import load_mesh_for_analysis
 
-            write_dict2json(os.path.join(out_dir, stem + "_sym_type.json"), build_symmetry_type_dict(state))
+        sym_type = job.sym_type
+        axis_template = get_symmetry_axis_template(sym_type, job.n_fold)
+        sym_op = _kasalv1_sym_op(sym_type)
+        score_mode = "colors" if tex else "pts"
+        report_compute_stage("preprocess", "Loading mesh for kasalv1", fraction=0.15)
+        bundle = load_mesh_for_analysis(job.mesh_path, need_colors=tex, policy=job.policy)
+        model = dict(bundle.kasalv1_model)
+        report_compute_stage("cal_sym", "kasalv1 axis localization (ICP)", fraction=0.45)
+        model = localize_symmetry_axes(
+            model,
+            template_or_step_path=axis_template,
+            symmetry_operation=sym_op,
+            color_symmetry_orbits=True,
+            score_mode=score_mode,
+            config=DEFAULT_KASALV1_CONFIG,
+            refine_with_icp=True,
+            axis_constraint=job.axis_xyz,
+        )
+        model_info = dict(model)
+        report_compute_stage("export", "Saving sym.ply / JSON", fraction=0.9)
+        if "sym_ply" in job.exports and sym_type != "None":
+            model_info = _save_ply_model_atomically(model, sidecar_sym_ply_path(job.mesh_path))
+        if "sym_type_json" in job.exports:
+            state = _job_state(
+                job,
+                sym_type,
+                job.n_fold,
+                model_info,
+                engine=KASALV1_ENGINE,
+                sym_type_source=job.sym_type_source or "user",
+                n_fold_source=job.n_fold_source or "user",
+            )
+            write_json(sidecar_sym_type_path(job.mesh_path), build_symmetry_type_dict(state))
         return SymmetryJobResult(
             success=True,
-            current_obj_info=model_info_i,
+            current_obj_info=model_info,
             sym_type=sym_type,
             n_fold=job.n_fold,
             engine_used=KASALV1_ENGINE,
@@ -225,20 +253,17 @@ def _run_kasalv1_job(job: SymmetryJobSpec, *, tex: bool) -> SymmetryJobResult:
         return SymmetryJobResult(success=False, error=str(exc), engine_used=KASALV1_ENGINE)
 
 
-def _job_state(job, sym_type, n_fold, current_obj_info, *, engine, sources):
-    from kasal.utils.io_json import SymmetryAnnotationState
-
+def _job_state(job, sym_type, n_fold, current_obj_info, *, engine, sym_type_source, n_fold_source):
     return SymmetryAnnotationState(
         sym_type=sym_type,
         n_fold=n_fold,
         adi_c=job.adi_c,
         axis_xyz=job.axis_xyz,
         current_obj_info=current_obj_info,
-        sym_type_source=sources[0],
-        n_fold_source=sources[1],
+        sym_type_source=sym_type_source,
+        n_fold_source=n_fold_source,
         axis_xyz_source="user" if job.axis_xyz != "None" else "none",
         compute_engine=engine,
-        kasalv2_snapshot=current_obj_info if engine == KASALV2_ENGINE else None,
     )
 
 
@@ -247,19 +272,38 @@ def apply_job_result_to_config(job: SymmetryJobSpec, result: SymmetryJobResult) 
 
     if not result.success:
         return
-    config.ui_options_selected = result.sym_type
-    config.ui_int = result.n_fold
+    config.selected_symmetry_type = result.sym_type
+    config.selected_n_fold = result.n_fold
+    config.adi_color_enabled = job.adi_c
+    config.selected_axis_constraint = job.axis_xyz
+    config.axis_xyz_source = "user" if job.axis_xyz != "None" else "none"
     config.current_obj_info = result.current_obj_info
     if result.engine_used == KASALV2_ENGINE:
         config.sym_type_source = "kasalv2_auto"
         config.n_fold_source = "kasalv2_auto"
-        config.kasalv2_snapshot = result.current_obj_info
     else:
         config.sym_type_source = job.sym_type_source or "user"
         config.n_fold_source = job.n_fold_source or "user"
     config.compute_engine = normalize_engine(result.engine_used)
 
 
-# Backward-compatible aliases (deprecated).
-_run_legacy_job = _run_kasalv1_job
-_legacy_sym_op = _kasalv1_sym_op
+def _kasalv2_result_to_ui(bop_dict: dict) -> tuple[str, int]:
+    """Map kasalv2 BOP output to UI sym_type and n-fold."""
+
+    sym_type = bop_dict.get("rot_sym_type") or "None"
+    n_fold = bop_dict.get("n_fold", 2)
+    if not bop_dict.get("has_rot_sym", False):
+        return "None", 2
+    ui_type = sym_type if sym_type in config.symmetry_type_options else config.symmetry_type_options[0]
+    try:
+        if str(n_fold) == "inf":
+            ui_n = config.selected_n_fold
+        else:
+            ui_n = int(n_fold)
+    except (TypeError, ValueError):
+        ui_n = 2
+    if ui_n < 2:
+        ui_n = 2
+    if ui_n > config.max_n_fold:
+        ui_n = config.max_n_fold
+    return ui_type, ui_n

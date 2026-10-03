@@ -147,34 +147,6 @@ def _visit_window_tree(display, window_id: int, x11, visit: Callable[[int], None
             x11.XFree(children)
 
 
-def find_window_by_title(title: str) -> int:
-    x11 = _x11_lib()
-    if not x11 or not title:
-        return 0
-
-    display = x11.XOpenDisplay(None)
-    if not display:
-        return 0
-
-    matched = 0
-
-    def visit(window_id: int) -> None:
-        nonlocal matched
-        if matched:
-            return
-        for window_title in _window_titles(display, window_id, x11):
-            if window_title == title:
-                matched = window_id
-                return
-
-    try:
-        root_window = x11.XDefaultRootWindow(display)
-        _visit_window_tree(display, root_window, x11, visit)
-        return matched
-    finally:
-        x11.XCloseDisplay(display)
-
-
 def _with_window_by_title(title: str, action: Callable[[object, int, object], bool]) -> bool:
     x11 = _x11_lib()
     if not x11 or not title:

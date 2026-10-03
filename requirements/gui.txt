@@ -2,10 +2,6 @@
 # polyscope>=2.6.1 required for Chinese UI (CJK font atlas Build + PushFont)
 pymeshlab==2023.12.post1
 polyscope==2.6.1
-opencv-python==4.5.5.64
 opencv-contrib-python==4.5.5.64
-imageio
-pypng
-pytz
-pywin32; platform_system == "Windows"
-glfw; platform_system == "Linux"
+pywin32>=305,<400; platform_system == "Windows"
+glfw>=2.6,<3; platform_system == "Linux"

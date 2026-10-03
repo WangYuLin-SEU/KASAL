@@ -1,6 +1,6 @@
 {
   "job_version": 1,
-  "mesh_dir": "kasal/datasets/shape_meshes",
+  "mesh_dir": "../datasets/shape_meshes",
   "defaults": {
     "engine": "kasalv2",
     "tex": false,

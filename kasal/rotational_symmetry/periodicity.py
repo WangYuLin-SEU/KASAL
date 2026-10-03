@@ -16,7 +16,7 @@ from scipy.interpolate import UnivariateSpline
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks, savgol_filter
 
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
 from .geometry import batched_chamfer_distance, normalize_vector, rodrigues
 
 

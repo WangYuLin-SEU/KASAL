@@ -1,45 +1,79 @@
-# KASAL + kasalv2 Installation
+<div align="center">
 
-> **KASALv2 quick path:** Step-by-step source install + demo launch → **[install_kasalv2.md](install_kasalv2.md)** (English) · **[install_kasalv2_zh.md](install_kasalv2_zh.md)** (中文). This file is the full technical reference.
+**English** | [中文](install_zh.md) · [Project home](../README.md)
 
-Integrated package layout: **kasalv1** (original KASAL: PyMeshLab + Polyscope) + **kasalv2** rotational symmetry (`kasal/rotational_symmetry/`), which **requires PyTorch3D**.
+</div>
 
-Dependencies: **4 files** in `requirements/` (`base`, `torch-cpu`, `torch-gpu`, `gui`). Run from **`KASAL/`**.
+# Install KASALv2 from source
 
-## Profiles
+The integrated KASALv2 application is currently distributed from this repository, not from the `kasal-6d` PyPI package. Python 3.10 and conda are recommended.
 
-| Profile | Install | Use case |
-|---------|---------|----------|
-| Legacy only | `python scripts/install_deps.py base` | No kasalv2 / no torch |
-| Headless CPU | `python scripts/install_deps.py headless-cpu` | Server batch |
-| Headless GPU | `python scripts/install_deps.py headless-gpu` | GPU batch |
-| Full CPU | `python scripts/install_deps.py full-cpu` | Desktop + PyMeshLab |
-| Full GPU | `python scripts/install_deps.py full-gpu` | Recommended with NVIDIA GPU |
+## Choose a profile
 
-`torch-cpu` and `torch-gpu` are **mutually exclusive** (pick one per environment).
+| Profile | Use case |
+|---------|----------|
+| `full-cpu` | Complete desktop application without CUDA |
+| `full-gpu` | Complete desktop application with a compatible NVIDIA GPU |
+| `headless-cpu` | Command-line KASALv2 processing on CPU |
+| `headless-gpu` | Command-line KASALv2 processing on CUDA |
 
-Equivalent plain pip (full CPU):
+CPU and GPU torch packages are alternatives; do not install both in one environment. The exact profile composition is listed in [requirements/README.md](../requirements/README.md).
 
-```bash
-pip install -r requirements/base.txt -r requirements/torch-cpu.txt -r requirements/gui.txt
-```
-
-See **`requirements/README.md`** for all profile names.
-
-## Recommended setup (conda)
+## Install and verify
 
 ```bash
+git clone https://github.com/WangYuLin-SEU/KASAL.git
+cd KASAL
 conda create -n kasal python=3.10
 conda activate kasal
-cd KASAL
-python scripts/install_deps.py full-cpu    # or full-gpu
+python scripts/install_deps.py full-cpu
+python scripts/verify_pytorch3d.py
 ```
 
-On machines **without NVIDIA GPU**, use `full-cpu` and set `KASAL_TORCH_DEVICE=cpu`.
+Use `full-gpu` instead of `full-cpu` only when the machine has a compatible NVIDIA/CUDA environment. A successful verification prints the torch version, confirms a PyTorch3D operation, and reports `cpu` or `cuda`.
 
-### Linux (Ubuntu 20.04+) GUI system packages
+## Launch the GUI
 
-Polyscope/GLFW needs OpenGL + X11 (or XWayland). For the desktop GUI also install a folder picker backend and CJK fonts:
+```bash
+python demo_shape_meshes.py
+```
+
+For the bundled textured example:
+
+```bash
+python demo_texture_meshes.py
+```
+
+Both commands open the same **Setup → KASAL** interface with different initial data folders. The [project README](../README.md#usage-essentials) summarizes the normal workflow.
+
+## First run
+
+1. On **Setup**, choose the interface language, dataset folder, preprocessing policy, and compute device.
+2. Click **Confirm**. KASAL saves these dataset-level settings to `KASAL.json` in the selected folder, then opens the main panel.
+3. Keep the current-object engine on `kasalv2` for automatic analysis. Use **Cal Current** for one object.
+4. **Cal All (unsaved)** processes only objects without a saved result or objects edited since loading. Completed objects write `{stem}_sym_type.json` and, when applicable, `{stem}_sym.ply`.
+
+Returning to Setup changes configuration without deleting existing annotation sidecars.
+
+## Headless use
+
+Install `headless-cpu` or `headless-gpu`, then run:
+
+```bash
+python -m kasal.cli.run_job kasal/jobs/example_job.json
+```
+
+Headless profiles omit Polyscope and PyMeshLab. Use the `kasalv2_strict` preprocessing policy, which can prepare meshes for either engine. The desktop interface and PyMeshLab preprocessing (`kasalv1` or adaptive fallback) require a full profile.
+
+## PyTorch3D packages
+
+The checked-in requirements pin matching torch 2.4.1, torchvision 0.19.1, and PyTorch3D 0.7.8 builds for CPU or CUDA 11.8. PyTorch3D is installed from the [MiroPsota package index](https://miropsota.github.io/torch_packages_builder/), because PyPI does not provide the required Windows wheel.
+
+Prefer the repository profiles over installing `pytorch3d` independently. If verification fails, create a clean Python 3.10 environment and install one complete CPU or GPU profile.
+
+## Linux desktop packages
+
+Ubuntu 20.04+ needs OpenGL/X11 libraries, a folder picker, and a CJK font for Chinese UI:
 
 ```bash
 sudo apt update
@@ -49,109 +83,43 @@ sudo apt install -y \
   python3-tk zenity fonts-noto-cjk pciutils
 ```
 
-- **Folder picker**: `zenity` (GNOME) or `kdialog` (KDE) or `python3-tk`
-- **Chinese UI**: `fonts-noto-cjk` (or set `KASAL_UI_FONT` to a local `.ttf`/`.ttc`)
-- **GPU hint table**: `pciutils` provides `lspci` when `nvidia-smi` is missing
+KDE users may install `kdialog` instead of `zenity`.
 
-**SSH / no physical display** (optional virtual framebuffer):
+## Chinese interface
 
-```bash
-sudo apt install -y xvfb
-Xvfb :99 -screen 0 1920x1080x24 &
-export DISPLAY=:99
-python demo_shape_meshes.py
+The Chinese UI requires `polyscope==2.6.1`, already pinned in the GUI profile, and a CJK font. If automatic font discovery is insufficient, set `KASAL_UI_FONT` to a local `.ttf` or `.ttc` file before launching the application.
+
+Example for Windows PowerShell:
+
+```powershell
+$env:KASAL_UI_FONT = "C:\Windows\Fonts\msyh.ttc"
 ```
 
-**Wayland note**: taskbar/window icons use GLFW or X11 `_NET_WM_ICON`. On pure Wayland sessions without XWayland, the custom icon may not appear (app still runs).
+## Device override
 
-## PyTorch3D (required for kasalv2)
+Normally, select the device on the Setup page. For a shell-only override:
 
-Official [PyPI](https://pypi.org/project/pytorch3d/) has **no Windows wheels**. Use prebuilt packages from [MiroPsota torch_packages_builder](https://miropsota.github.io/torch_packages_builder):
-
-| Platform | torch | Install pytorch3d tag (Python 3.10) |
-|----------|-------|-------------------------------------|
-| Windows / Linux CPU | 2.4.1+cpu | `pytorch3d==0.7.8+pt2.4.1cpu` |
-| Windows / Linux GPU cu118 | 2.4.1+cu118 | `pytorch3d==0.7.8+pt2.4.1cu118` |
-
-Pinned in `requirements/torch-cpu.txt` and `requirements/torch-gpu.txt`.
-
-Manual install (if you already have matching torch):
-
-```bash
-pip install iopath fvcore
-pip install --extra-index-url https://miropsota.github.io/torch_packages_builder pytorch3d==0.7.8+pt2.4.1cpu
+```powershell
+# Windows PowerShell
+$env:KASAL_TORCH_DEVICE = "cpu"
 ```
 
-**Do not** `pip install pytorch3d` from PyPI alone on Windows — it will fail or mismatch torch.
-
-### Verify PyTorch3D
-
-```bash
-python -c "import torch; from pytorch3d.ops import knn_points; print('torch', torch.__version__, 'ok')"
+```bat
+:: Windows cmd
+set KASAL_TORCH_DEVICE=cpu
 ```
 
-## Full vs Headless
-
-- **Headless** (`headless-cpu` / `headless-gpu`): kasalv2 mesh loading only (`kasalv2_strict`). No Polyscope/PyMeshLab.
-- **Full** (`full-cpu` / `full-gpu`): adds `gui.txt` for `kasalv2_adaptive` fallback and `kasalv1` preprocess.
-
-## Chinese UI (polyscope 2.6.1)
-
-The Setup/KASAL **中文** interface loads a CJK font at runtime. Search order: `KASAL_UI_FONT` env → OS font paths → Linux `fc-list :lang=zh`. This requires **`polyscope==2.6.1`** (pinned in `requirements/gui.txt`). If your env still has `polyscope 2.3.x`, Chinese labels render as **square boxes** (`□`) or `????`.
-
 ```bash
-cd KASAL
-conda activate kasal
-python -m pip install --upgrade polyscope==2.6.1
-# or reinstall the full GUI stack:
-python scripts/install_deps.py gui
+# Linux
+export KASAL_TORCH_DEVICE=cpu
 ```
 
-Override the font path:
+The environment override takes precedence over the saved GUI choice. An invalid or unavailable explicitly selected device raises an error; only automatic device selection can fall back to CPU.
 
-```bash
-# Windows (cmd)
-set KASAL_UI_FONT=C:\Windows\Fonts\msyh.ttc
+## Common problems
 
-# Linux / macOS (bash)
-export KASAL_UI_FONT=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
-```
-
-After upgrade, restart the demo (`demo_shape_meshes.py` / `demo_texture_meshes.py`). Console should print `[KASAL] Loaded UI font: ...` when a CJK font is found.
-
-## Environment variables
-
-| Variable | Values | Purpose |
-|----------|--------|---------|
-| `KASAL_TORCH_DEVICE` | `cpu` \| `cuda` | Force device when CUDA is missing or for CPU-only machines |
-| `KASAL_UI_FONT` | path to `.ttf`/`.ttc` | Override CJK UI font (Chinese mode only) |
-| `KASAL_SEED` | integer | Optional reproducibility (batch scripts) |
-
-## Verified matrix (fill in locally)
-
-| Python | torch | pytorch3d | CUDA | OS |
-|--------|-------|-----------|------|-----|
-| 3.10 | 2.4.1+cpu | 0.7.8+pt2.4.1cpu | — | Windows 10 (conda kasal) |
-| 3.10 | 2.4.1+cpu | 0.7.8+pt2.4.1cpu | — | Ubuntu 20.04+ (conda kasal) |
-| 3.10 | 2.4.1+cu118 | 0.7.8+pt2.4.1cu118 | cu118 | (your GPU machine) |
-
-## Headless job
-
-```bash
-cd KASAL
-export KASAL_TORCH_DEVICE=cpu   # Windows cmd: set KASAL_TORCH_DEVICE=cpu
-python -m kasal.cli.run_job kasal/jobs/example_job.json
-```
-
-## GSO regression (kasalv2 standalone scripts)
-
-From repo root `kasalv2/`:
-
-```bash
-conda activate kasal
-export KASAL_TORCH_DEVICE=cpu   # Windows cmd: set KASAL_TORCH_DEVICE=cpu
-python scripts/verify_gso_regression.py --workers 4
-python scripts/monitor_gso_progress.py --watch
-```
-
-See `revise_kasal.md` for progress monitoring.
+- **GPU is detected but cannot be selected:** the active PyTorch build is CPU-only; install `full-gpu` in a clean environment.
+- **Chinese labels appear as boxes:** verify `polyscope==2.6.1` and install or select a CJK font.
+- **Mesh preprocessing fails:** try `kasalv2_adaptive` in a full installation, or check that the mesh has valid geometry.
+- **A GUI folder appears empty:** folder discovery includes `.ply` and `.obj` files case-insensitively and excludes generated `*_sym.ply` files.
+- **You installed `kasal-6d` from PyPI:** that is the separately released classic kasalv1 package; see the [kasalv1 guide](README_kasalv1.md).

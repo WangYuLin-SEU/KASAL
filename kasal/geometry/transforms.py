@@ -7,30 +7,26 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
+"""Rigid transforms shared by the v1 and v2 symmetry pipelines."""
+
 import numpy as np
 
-def rotate_translate(axis, theta, t):
-    """ Compute the transformation matrix based on the direction  
-        of the symmetry/key axis, rotation angle, and translation component.  
-    Parameters:  
-        axis: Direction vector of the symmetry/key axis.  
-        theta: Rotation angle.  
-        t: Translation vector.  
-    Returns:  
-        M: Transformation matrix containing rotation and translation.  
-    """
+def rotation_about_axis(axis, angle_deg, center):
+    """Return a 4x4 rotation about a fixed center; angle_deg is in degrees.
 
-    theta = np.deg2rad(theta)
+    A NumPy axis array is normalized in place."""
+
+    angle_rad = np.deg2rad(angle_deg)
     axis = np.asarray(axis)
     axis /= np.linalg.norm(axis)
-    K = np.array([[0, -axis[2], axis[1]],
+    skew_matrix = np.array([[0, -axis[2], axis[1]],
                 [axis[2], 0, -axis[0]],
                 [-axis[1], axis[0], 0]])
-    R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * np.dot(K, K)
-    M = np.eye(4)
-    M[:3, :3] = R
-    t_ = np.dot(R, t.reshape((3)), )
-    dt_ = t - t_ 
-    M[:3, 3] = dt_
-    return M
+    rotation = np.eye(3) + np.sin(angle_rad) * skew_matrix + (1 - np.cos(angle_rad)) * np.dot(skew_matrix, skew_matrix)
+    transform = np.eye(4)
+    transform[:3, :3] = rotation
+    rotated_center = np.dot(rotation, center.reshape((3)), )
+    center_offset = center - rotated_center
+    transform[:3, 3] = center_offset
+    return transform
 

@@ -6,7 +6,3 @@
 # 维护与 pip 打包：胡梦婷 Hu Mengting (220240361@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
-
-from .color_error import *
-from .keyaxis import *
-from .rotate import *

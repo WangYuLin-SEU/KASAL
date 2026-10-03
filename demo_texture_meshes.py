@@ -8,10 +8,7 @@
 # 东南大学机械工程学院
 
 from kasal.app.polyscope_app import app
-from kasal.datasets.datasets_path import texture_mesh_path
+from kasal.datasets.paths import texture_mesh_path
 
-if __name__ == '__main__':
-    
+if __name__ == "__main__":
     app(texture_mesh_path)
-
-    pass

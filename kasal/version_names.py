@@ -13,10 +13,12 @@ from __future__ import annotations
 
 KASALV1_ENGINE = "kasalv1"
 KASALV2_ENGINE = "kasalv2"
+ENGINES = (KASALV1_ENGINE, KASALV2_ENGINE)
 
 KASALV1_PREPROCESS = "kasalv1"
 KASALV2_ADAPTIVE = "kasalv2_adaptive"
 KASALV2_STRICT = "kasalv2_strict"
+PREPROCESS_POLICIES = (KASALV1_PREPROCESS, KASALV2_ADAPTIVE, KASALV2_STRICT)
 
 # Backward-compatible aliases for saved JSON / older experiment outputs.
 ENGINE_ALIASES = {
@@ -37,11 +39,22 @@ def normalize_engine(engine: str | None) -> str:
     return ENGINE_ALIASES.get(key, key)
 
 
-def normalize_preprocess_policy(policy: str | None) -> str:
+def validate_engine(engine: str | None) -> str:
+    normalized = normalize_engine(engine)
+    if normalized not in ENGINES:
+        raise ValueError(f"unknown symmetry engine: {engine!r}")
+    return normalized
+
+
+def validate_preprocess_policy(policy: str | None) -> str:
     if not policy:
-        return KASALV2_ADAPTIVE
-    key = str(policy).strip()
-    return PREPROCESS_ALIASES.get(key, key)
+        normalized = KASALV2_ADAPTIVE
+    else:
+        key = str(policy).strip()
+        normalized = PREPROCESS_ALIASES.get(key, key)
+    if normalized not in PREPROCESS_POLICIES:
+        raise ValueError(f"Unknown mesh preprocessing policy: {policy!r}")
+    return normalized
 
 
 def is_kasalv1_engine(engine: str | None) -> bool:

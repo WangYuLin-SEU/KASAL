@@ -7,6 +7,6 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
-from kasal.viz.symmetry_visual_export import build_model_i_for_save_ply
+from kasal.viz.symmetry_visual_export import build_symmetry_visualization_model
 
-__all__ = ["build_model_i_for_save_ply"]
+__all__ = ["build_symmetry_visualization_model"]

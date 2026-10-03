@@ -9,138 +9,134 @@
 
 import copy
 import numpy as np
-from kasal.bop_toolkit_lib import inout, misc
-import kasal.config.config as config
-from kasal.datasets.datasets_path import arrow_path
-from kasal.utils.io_ply_meshlab import simplify_3DModel_v2
-from kasal.utils.mesh_preprocess import load_mesh_for_analysis
+from kasal.bop_toolkit_lib import inout
+from kasal.datasets.paths import arrow_path
 
+def save_ply_model(model, output_ply, *, arrow_ratio: float, save_twofold_axis: bool):
+    """Export the mesh and symmetry arrows; return serializable symmetry metadata.
 
-def load_ply_model(input_ply, color_op=True):
-    """Load and simplify the object model (legacy entry; uses mesh_preprocess)."""
+    arrow_ratio scales arrows relative to the diameter. The caller handles
+    atomic replacement of the output file."""
 
-    bundle = load_mesh_for_analysis(input_ply, need_colors=color_op)
-    if bundle.legacy_model:
-        return dict(bundle.legacy_model)
-    model_i_ = {}
-    vertices, colors, faces, normals = simplify_3DModel_v2(
-        input_file=input_ply,
-        targetfacenum=40000,
-        color_op=color_op,
-    )
-    model_i_["vertices"] = vertices
-    model_i_["colors"] = colors
-    model_i_["faces"] = faces
-    model_i_["normals"] = normals
-    model_i_["diameter"] = misc.calc_pts_diameter(vertices)
-    return model_i_
+    def add_arrow(output_mesh, arrow_mesh, rotation, center, color_variant = 0):
+        """Append transformed arrow geometry, normals and a selected color variant."""
 
-def save_ply_model(model_i_, output_ply):
-    """ Save the object model, the model representing rotational symmetry, and rotational symmetry information. """
-    
-    def add_arrow(model_save, model_arrow, rot_i, center_ch, k_ = 0):
-        model_arrow_ = copy.deepcopy(model_arrow)
-        model_arrow_['pts'] = np.dot(rot_i, model_arrow_['pts'].T).T + center_ch
-        model_save['faces'] = np.concatenate((model_save['faces'], model_arrow_['faces'] + model_save['pts'].shape[0]), axis=0)
-        model_save['pts'] = np.concatenate((model_save['pts'], model_arrow_['pts']), axis=0)
-        model_save['normals'] = np.concatenate((model_save['normals'], model_arrow_['normals']), axis=0)
-        if k_ == 0:
-            model_save['colors'] = np.concatenate((model_save['colors'], model_arrow_['colors']), axis=0)
-        elif k_ == 1:
-            model_arrow_c = model_arrow_['colors'].copy()
-            model_arrow_c[:,0] = model_arrow_['colors'][:,2]
-            model_arrow_c[:,2] = model_arrow_['colors'][:,0]
-            model_save['colors'] = np.concatenate((model_save['colors'], model_arrow_c), axis=0)
-        elif k_ == 2:
-            model_arrow_c = model_arrow_['colors'].copy()
-            model_arrow_c[:,0] = model_arrow_['colors'][:,1]
-            model_arrow_c[:,1] = model_arrow_['colors'][:,0]
-            model_save['colors'] = np.concatenate((model_save['colors'], model_arrow_c), axis=0)
+        transformed_arrow = copy.deepcopy(arrow_mesh)
+        transformed_arrow['pts'] = np.dot(rotation, transformed_arrow['pts'].T).T + center
+        transformed_arrow['normals'] = np.dot(rotation, transformed_arrow['normals'].T).T
+        output_mesh['faces'] = np.concatenate((output_mesh['faces'], transformed_arrow['faces'] + output_mesh['pts'].shape[0]), axis=0)
+        output_mesh['pts'] = np.concatenate((output_mesh['pts'], transformed_arrow['pts']), axis=0)
+        output_mesh['normals'] = np.concatenate((output_mesh['normals'], transformed_arrow['normals']), axis=0)
+        if color_variant == 0:
+            output_mesh['colors'] = np.concatenate((output_mesh['colors'], transformed_arrow['colors']), axis=0)
+        elif color_variant == 1:
+            arrow_colors = transformed_arrow['colors'].copy()
+            arrow_colors[:,0] = transformed_arrow['colors'][:,2]
+            arrow_colors[:,2] = transformed_arrow['colors'][:,0]
+            output_mesh['colors'] = np.concatenate((output_mesh['colors'], arrow_colors), axis=0)
+        elif color_variant == 2:
+            arrow_colors = transformed_arrow['colors'].copy()
+            arrow_colors[:,0] = transformed_arrow['colors'][:,1]
+            arrow_colors[:,1] = transformed_arrow['colors'][:,0]
+            output_mesh['colors'] = np.concatenate((output_mesh['colors'], arrow_colors), axis=0)
         return
 
-    def transform_from_vec2_2_vec1(axis_2, axis_1):
-        axis_3 = np.cross(axis_1, axis_2)
-        if np.linalg.norm(axis_3) == 0:
-            rot_ = np.eye(3)
-        else:
-            axis_3 /= np.linalg.norm(axis_3)
-            axis_10 = np.cross(axis_1, axis_3)
-            axis_20 = np.cross(axis_2, axis_3)
-            axis_10 /= np.linalg.norm(axis_10)
-            axis_20 /= np.linalg.norm(axis_20)
-            points_original = np.array([axis_1, axis_3, axis_10])
-            points_translated = np.array([axis_2, axis_3, axis_20])
-        rot_ = np.dot(points_original.T, np.linalg.inv(points_translated.T))
-        return rot_
+    def rotation_between_vectors(source_axis, target_axis):
+        """Return a 3x3 rotation mapping the source direction onto the target."""
 
-    info_ = model_i_
-    model_save = {}
-    model_save['pts'] = np.array(info_['vertices'], dtype='float')
-    model_save['normals'] = np.array(info_['normals'], dtype='float')
-    model_save['faces'] = np.array(info_['faces'], dtype='int')
-    while True:
-        if np.max(np.array(info_['colors']).reshape((-1))) > 1:
-            info_['colors'] /= 255
-        else:
-            break
-    model_save['colors'] = np.array(info_['colors'] * 255, dtype='int')
-    if 'sym_colors' in info_:
-        model_save['colors'] = np.array(info_['sym_colors'] * 255, dtype='int')
-        arrow_ply = inout.load_ply(arrow_path)
-        colors_4 = np.zeros((arrow_ply['colors'].shape[0], 4), dtype=np.uint8)
-        colors_4[:, 3] = 255
-        colors_4[:, :3] = arrow_ply['colors']
-        arrow_ply['colors'] = colors_4
-        arrow_pts = arrow_ply['pts']
-        arrow_x, arrow_y, arrow_z = arrow_pts[:,0], arrow_pts[:,1], arrow_pts[:,2]
-        arrow_ply['pts'][:,0] -= (np.min(arrow_x)+np.max(arrow_x))/2
-        arrow_ply['pts'][:,1] -= (np.min(arrow_y)+np.max(arrow_y))/2
-        arrow_ply['pts'] = arrow_ply['pts'] / 1000 * info_['diameter'] * config.arrow_ratio
-        arrow_x, arrow_y, arrow_z = arrow_pts[:,0], arrow_pts[:,1], arrow_pts[:,2]
-        for axis_i in info_['axis']:
-            rot_i = transform_from_vec2_2_vec1(np.array([0,0,1]), axis_i)
-            add_arrow(model_save, arrow_ply, rot_i, info_['center_ch'])
-        inout.save_ply(output_ply, model_save)
+        source = np.array(source_axis, dtype=float, copy=True)
+        target = np.array(target_axis, dtype=float, copy=True)
+        source_norm = np.linalg.norm(source)
+        target_norm = np.linalg.norm(target)
+        if source_norm == 0 or target_norm == 0:
+            raise ValueError("Symmetry visualization axis must be non-zero.")
+        source /= source_norm
+        target /= target_norm
+        cosine = float(np.clip(np.dot(source, target), -1.0, 1.0))
+
+        if np.isclose(cosine, 1.0):
+            return np.eye(3)
+        if np.isclose(cosine, -1.0):
+            basis = np.array([1.0, 0.0, 0.0])
+            if abs(source[0]) > 0.9:
+                basis = np.array([0.0, 1.0, 0.0])
+            rotation_axis = np.cross(source, basis)
+            rotation_axis /= np.linalg.norm(rotation_axis)
+            return 2.0 * np.outer(rotation_axis, rotation_axis) - np.eye(3)
+
+        cross = np.cross(source, target)
+        skew = np.array(
+            [
+                [0.0, -cross[2], cross[1]],
+                [cross[2], 0.0, -cross[0]],
+                [-cross[1], cross[0], 0.0],
+            ]
+        )
+        return np.eye(3) + skew + np.dot(skew, skew) * ((1.0 - cosine) / np.dot(cross, cross))
+
+    model_info = model
+    output_mesh = {}
+    output_mesh['pts'] = np.array(model_info['vertices'], dtype='float')
+    output_mesh['normals'] = np.array(model_info['normals'], dtype='float')
+    output_mesh['faces'] = np.array(model_info['faces'], dtype='int')
+    colors = np.array(model_info['colors'], dtype=float, copy=True)
+    while colors.size and np.max(colors) > 1:
+        colors /= 255
+    output_mesh['colors'] = np.array(colors * 255, dtype='int')
+    if 'sym_colors' in model_info:
+        output_mesh['colors'] = np.array(np.asarray(model_info['sym_colors']) * 255, dtype='int')
+    arrow_mesh = inout.load_ply(arrow_path)
+    arrow_rgba = np.zeros((arrow_mesh['colors'].shape[0], 4), dtype=np.uint8)
+    arrow_rgba[:, 3] = 255
+    arrow_rgba[:, :3] = arrow_mesh['colors']
+    arrow_mesh['colors'] = arrow_rgba
+    arrow_x, arrow_y = arrow_mesh['pts'][:,0], arrow_mesh['pts'][:,1]
+    arrow_mesh['pts'][:,0] -= (np.min(arrow_x)+np.max(arrow_x))/2
+    arrow_mesh['pts'][:,1] -= (np.min(arrow_y)+np.max(arrow_y))/2
+    arrow_mesh['pts'] = arrow_mesh['pts'] / 1000 * model_info['diameter'] * arrow_ratio
+    if 'sym_colors' in model_info:
+        for axis_i in model_info['axis']:
+            rotation = rotation_between_vectors(np.array([0,0,1]), axis_i)
+            add_arrow(output_mesh, arrow_mesh, rotation, model_info['center_ch'])
+        inout.save_ply(output_ply, output_mesh)
     else:
-        arrow_ply = inout.load_ply(arrow_path)
-        colors_4 = np.zeros((arrow_ply['colors'].shape[0], 4), dtype=np.uint8)
-        colors_4[:, 3] = 255
-        colors_4[:, :3] = arrow_ply['colors']
-        arrow_ply['colors'] = colors_4
-        arrow_pts = arrow_ply['pts']
-        arrow_x, arrow_y, arrow_z = arrow_pts[:,0], arrow_pts[:,1], arrow_pts[:,2]
-        arrow_ply['pts'][:,0] -= (np.min(arrow_x)+np.max(arrow_x))/2
-        arrow_ply['pts'][:,1] -= (np.min(arrow_y)+np.max(arrow_y))/2
-        arrow_ply['pts'] = arrow_ply['pts'] / 1000 * info_['diameter'] * config.arrow_ratio
-        arrow_x, arrow_y, arrow_z = arrow_pts[:,0], arrow_pts[:,1], arrow_pts[:,2]
-        if 'symmetries_continuous' in info_:
-            if len(info_['symmetries_continuous'][0]['axis']):
-                rot_i = transform_from_vec2_2_vec1(np.array([0,0,1]), np.array(info_['symmetries_continuous'][0]['axis']))
-                add_arrow(model_save, arrow_ply, rot_i, np.array(info_['symmetries_continuous'][0]['offset']))
+        if 'symmetries_continuous' in model_info:
+            if len(model_info['symmetries_continuous'][0]['axis']):
+                rotation = rotation_between_vectors(np.array([0,0,1]), np.array(model_info['symmetries_continuous'][0]['axis']))
+                add_arrow(output_mesh, arrow_mesh, rotation, np.array(model_info['symmetries_continuous'][0]['offset']))
             else:
-                rot_i = rot_i = transform_from_vec2_2_vec1(np.array([0,0,1]).astype(np.float32), np.array([1,0,0]).astype(np.float32))
-                add_arrow(model_save, arrow_ply, rot_i, np.array(info_['symmetries_continuous'][0]['offset']), k_ = 0)
-                rot_i = transform_from_vec2_2_vec1(np.array([0,0,1]).astype(np.float32), np.array([0,1,0]).astype(np.float32))
-                add_arrow(model_save, arrow_ply, rot_i, np.array(info_['symmetries_continuous'][0]['offset']), k_ = 2)
-                rot_i = np.eye(3)
-                add_arrow(model_save, arrow_ply, rot_i, np.array(info_['symmetries_continuous'][0]['offset']), k_ = 1)
-            inout.save_ply(output_ply, model_save)
-        if 'symmetries_discrete' in info_ and config.save_2_fold_a is True:
-            rot_i = transform_from_vec2_2_vec1(np.array([1,0,0]), np.array(info_['symmetries_continuous'][0]['axis']))
-            add_arrow(model_save, arrow_ply, rot_i, np.array(info_['symmetries_continuous'][0]['offset']), k_=1)
-            inout.save_ply(output_ply, model_save)
-    model_info_i = {}
-    info_list_key_1 = [
+                rotation = rotation_between_vectors(np.array([0,0,1]).astype(np.float32), np.array([1,0,0]).astype(np.float32))
+                add_arrow(output_mesh, arrow_mesh, rotation, np.array(model_info['symmetries_continuous'][0]['offset']), color_variant = 0)
+                rotation = rotation_between_vectors(np.array([0,0,1]).astype(np.float32), np.array([0,1,0]).astype(np.float32))
+                add_arrow(output_mesh, arrow_mesh, rotation, np.array(model_info['symmetries_continuous'][0]['offset']), color_variant = 2)
+                rotation = np.eye(3)
+                add_arrow(output_mesh, arrow_mesh, rotation, np.array(model_info['symmetries_continuous'][0]['offset']), color_variant = 1)
+            inout.save_ply(output_ply, output_mesh)
+        if (
+            'symmetries_discrete' in model_info
+            and 'symmetries_continuous' in model_info
+            and save_twofold_axis
+        ):
+            rotation = rotation_between_vectors(np.array([1,0,0]), np.array(model_info['symmetries_continuous'][0]['axis']))
+            add_arrow(output_mesh, arrow_mesh, rotation, np.array(model_info['symmetries_continuous'][0]['offset']), color_variant=1)
+            inout.save_ply(output_ply, output_mesh)
+        elif 'symmetries_discrete' in model_info:
+            for axis_i in model_info.get('axis', []):
+                rotation = rotation_between_vectors(np.array([0,0,1]), axis_i)
+                add_arrow(output_mesh, arrow_mesh, rotation, model_info['center_ch'])
+            inout.save_ply(output_ply, output_mesh)
+    symmetry_info = {}
+    bounds_fields = [
         'diameter', 'min_x', 'min_y', 'min_z', 'size_x', 'size_y', 'size_z'
     ]
-    info_list_key_2 = [
-        'symmetries_discrete', 'symmetries_continuous', 
+    symmetry_fields = [
+        'symmetries_discrete', 'symmetries_continuous',
         'symmetries_continuous_2', 'symmetries_continuous_3'
     ]
-    for key_i in info_list_key_1:
-        if key_i in info_:
-            model_info_i[key_i] = float(info_[key_i])
-    for key_i in info_list_key_2:
-        if key_i in info_:
-            model_info_i[key_i] = np.array(info_[key_i]).tolist()
-    return model_info_i
+    for field_name in bounds_fields:
+        if field_name in model_info:
+            symmetry_info[field_name] = float(model_info[field_name])
+    for field_name in symmetry_fields:
+        if field_name in model_info:
+            symmetry_info[field_name] = np.array(model_info[field_name]).tolist()
+    return symmetry_info

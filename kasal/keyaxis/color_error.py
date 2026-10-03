@@ -7,26 +7,20 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
-import numpy as np 
+"""Nearest-neighbor scores used by KASALv1 candidate-axis search."""
+
+import numpy as np
 from scipy import spatial
 
-def rot_axis_color_error(pts, colors, mat,):
-    ''' Use KDTree to find the nearest point pairs before and after  
-        rotation around the axis, then compute the average distance  
-        and color errors.  
-    Parameters:  
-        pts: Vertex coordinates of the object.  
-        colors: Vertex colors of the object.  
-        mat: Transformation matrix containing rotation and translation.  
-    Returns:  
-        distance_error: Distance error.  
-        color_error: Color error.  
-    '''
-    ply_pts_m = np.dot(pts, mat[:3,:3])+mat[:3,3]
-    nn_index = spatial.cKDTree(pts)
-    d1, t1_index = nn_index.query(ply_pts_m, k=1)
-    dc_ = colors - colors[t1_index, :]
-    ndc_ = np.linalg.norm(dc_, axis=1)
-    color_error = np.mean(ndc_)
-    distance_error = np.mean(d1)
+def rotation_alignment_errors(points, colors, transform,):
+    """Return mean geometry and color errors using nearest-neighbor matches.
+
+    Keep the v1 row-vector rotation convention for score consistency."""
+    transformed_points = np.dot(points, transform[:3,:3])+transform[:3,3]
+    point_tree = spatial.cKDTree(points)
+    distances, nearest_indices = point_tree.query(transformed_points, k=1)
+    color_differences = colors - colors[nearest_indices, :]
+    color_distances = np.linalg.norm(color_differences, axis=1)
+    color_error = np.mean(color_distances)
+    distance_error = np.mean(distances)
     return distance_error, color_error

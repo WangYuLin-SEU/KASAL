@@ -17,8 +17,9 @@ import numpy as np
 import torch
 from pytorch3d.ops import knn_points
 
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
-from .geometry import build_rotation_transform, rodrigues
+from kasal.geometry.transforms import rotation_about_axis
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
+from .geometry import rodrigues
 
 
 Number = int | float
@@ -55,6 +56,27 @@ def prepare_colors(color, dev, normalize_if_255=True):
             if cx.numel() > 0 and cx.max().item() > 1.5:
                 cx = cx / 255.0
     return cx
+
+
+def _build_axis_ring(main_axis, direction_count: int, dev: torch.device):
+    """Build evenly spaced unoriented axes orthogonal to ``main_axis``."""
+
+    v = to_tensor_on_device(main_axis, dev, dtype=torch.float32).view(-1)[:3]
+    v = v / (torch.norm(v) + 1e-12)
+    tmp = (
+        torch.tensor([1.0, 0.0, 0.0], device=dev)
+        if torch.abs(v[0]) < 0.9
+        else torch.tensor([0.0, 1.0, 0.0], device=dev)
+    )
+    e1 = tmp - torch.dot(tmp, v) * v
+    e1 = e1 / (torch.norm(e1) + 1e-12)
+    e2 = torch.linalg.cross(v, e1)
+    e2 = e2 / (torch.norm(e2) + 1e-12)
+
+    phis = torch.linspace(0.0, math.pi, direction_count + 1, device=dev)[:-1]
+    axes = torch.cos(phis)[:, None] * e1[None, :] + torch.sin(phis)[:, None] * e2[None, :]
+    axes = axes / (torch.norm(axes, dim=1, keepdim=True) + 1e-12)
+    return e1, e2, axes
 
 
 def build_axis_records(axis_list: Any, rot_sym_type: str, n_geo_max: int | None = None) -> list[AxisRecord]:
@@ -335,17 +357,7 @@ def find_texture_2fold_axes_on_ring(
     if col.shape[0] != x.shape[0] or torch.var(col, dim=0, unbiased=False).mean().item() < tex_cfg.order_col_var_threshold:
         return []
 
-    v = to_tensor_on_device(main_axis, dev, dtype=torch.float32).view(-1)[:3]
-    v = v / (torch.norm(v) + 1e-12)
-    tmp = torch.tensor([1.0, 0.0, 0.0], device=dev) if torch.abs(v[0]) < 0.9 else torch.tensor([0.0, 1.0, 0.0], device=dev)
-    e1 = tmp - torch.dot(tmp, v) * v
-    e1 = e1 / (torch.norm(e1) + 1e-12)
-    e2 = torch.linalg.cross(v, e1)
-    e2 = e2 / (torch.norm(e2) + 1e-12)
-
-    phis = torch.linspace(0.0, math.pi, M_dir + 1, device=dev)[:-1]
-    axes_batch = torch.cos(phis)[:, None] * e1[None, :] + torch.sin(phis)[:, None] * e2[None, :]
-    axes_batch = axes_batch / (torch.norm(axes_batch, dim=1, keepdim=True) + 1e-12)
+    _, _, axes_batch = _build_axis_ring(main_axis, M_dir, dev)
 
     cx = prepare_colors(col, dev)
     theta_pi = torch.full((M_dir,), math.pi, dtype=torch.float32, device=dev)
@@ -456,17 +468,7 @@ def infer_side_axes_given_k(
     if k_main < 2:
         return [], 0
 
-    v = to_tensor_on_device(main_axis, dev, dtype=torch.float32).view(-1)[:3]
-    v = v / (torch.norm(v) + 1e-12)
-    tmp = torch.tensor([1.0, 0.0, 0.0], device=dev) if torch.abs(v[0]) < 0.9 else torch.tensor([0.0, 1.0, 0.0], device=dev)
-    e1 = tmp - torch.dot(tmp, v) * v
-    e1 = e1 / (torch.norm(e1) + 1e-12)
-    e2 = torch.cross(v, e1, dim=0)
-    e2 = e2 / (torch.norm(e2) + 1e-12)
-
-    phis = torch.linspace(0.0, math.pi, M_dir + 1, device=dev)[:-1]
-    axes_ring = torch.cos(phis)[:, None] * e1[None, :] + torch.sin(phis)[:, None] * e2[None, :]
-    axes_ring = axes_ring / (torch.norm(axes_ring, dim=1, keepdim=True) + 1e-12)
+    e1, e2, axes_ring = _build_axis_ring(main_axis, M_dir, dev)
     cx = prepare_colors(col, dev)
     theta_pi = torch.full((M_dir,), math.pi, dtype=torch.float32, device=dev)
     y_pi = torch.bmm(x.unsqueeze(0).expand(M_dir, -1, -1), rodrigues(axes_ring, theta_pi).transpose(1, 2))
@@ -624,7 +626,7 @@ def refine_symmetry_with_texture(
         else:
             nf = float(rec.n_tex)
             theta_deg = 1.0 if np.isinf(nf) else 360.0 / nf
-        sym_mats_tex.append(build_rotation_transform(np.asarray(rec.axis, dtype=np.float32).reshape(-1)[:3], theta_deg, center_np))
+        sym_mats_tex.append(rotation_about_axis(np.asarray(rec.axis, dtype=np.float32).reshape(-1)[:3], theta_deg, center_np))
 
     axes_out = [np.asarray(rec.axis, dtype=np.float32).reshape(-1)[:3].tolist() for rec in axes_sorted]
     if len(axes_sorted) == 0 or axes_sorted[0].n_tex is None:

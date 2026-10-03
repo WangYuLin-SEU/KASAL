@@ -17,12 +17,10 @@ import time
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rotational_symmetry.pipeline import (
-    discover_dataset_meshes,
+from kasal.rotational_symmetry.pipeline import (
     run_dataset_batch,
     select_chunk,
     write_dataset_summary,
@@ -104,6 +102,12 @@ def print_timing(summary: list[dict[str, object]]) -> None:
     analysis_sum = sum(float(item["analysis_sec"]) for item in successful_items)
     postprocess_sum = sum(float(item["postprocess_sec"]) for item in successful_items)
     total_sum = sum(float(item["total_sec"]) for item in successful_items)
+    if total_sum <= 0:
+        print(
+            "[DATASET] timing share unavailable: recorded total time is zero "
+            f"for {len(successful_items)} successful item(s)."
+        )
+        return
     print(
         "[DATASET] timing share: "
         f"preprocess={preprocess_sum:.4f}s ({(preprocess_sum / total_sum) * 100:.1f}%) | "
@@ -117,11 +121,7 @@ def main() -> int:
     input_dir = args.input_dir.resolve()
     output_dir = args.output_dir.resolve()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    all_meshes = discover_dataset_meshes(
-        input_dir,
-        pattern=args.pattern,
-    )
+    all_meshes = sorted(input_dir.glob(args.pattern))
     if not all_meshes:
         raise FileNotFoundError(f"No meshes found in: {input_dir}")
 

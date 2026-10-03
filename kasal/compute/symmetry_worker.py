@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import os
+
 from kasal.compute.symmetry_job import SymmetryJobSpec, run_symmetry_job
 from kasal.utils.compute_progress import (
     clear_progress_ipc_queue,
@@ -19,16 +21,21 @@ from kasal.utils.compute_progress import (
 )
 
 
-def mp_symmetry_worker_entry(job: SymmetryJobSpec, progress_queue, progress_meta: dict) -> None:
+def mp_symmetry_worker_entry(
+    job: SymmetryJobSpec,
+    progress_queue,
+    progress_index: int,
+    progress_total: int,
+) -> None:
     """Target for multiprocessing.Process; must stay top-level for Windows spawn."""
 
     set_progress_ipc_queue(progress_queue)
     pg = get_compute_progress()
     pg.begin_object(
-        progress_meta["mesh_name"],
-        object_index=int(progress_meta["progress_index"]),
-        object_total=int(progress_meta["progress_total"]),
-        engine=progress_meta.get("engine", job.engine),
+        os.path.basename(job.mesh_path),
+        object_index=progress_index,
+        object_total=progress_total,
+        engine=job.engine,
     )
     try:
         result = run_symmetry_job(job)

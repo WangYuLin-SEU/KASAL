@@ -23,9 +23,13 @@ Setup 与 KASAL 主面板的界面双语文案。
 
 from __future__ import annotations
 
-import kasal.config.config as config
-from kasal.compute.symmetry_job import SymmetryJobSpec, kasalv1_job_blocked_reason, symmetry_job_routing_note
-from kasal.device import GPU_INSTALL_CMD, GPU_INSTALL_DOC, gpu_install_hint_message
+import kasal.config.runtime as config
+from kasal.device import (
+    GPU_INSTALL_CMD,
+    GPU_INSTALL_DOC,
+    detect_hardware_nvidia_gpus,
+    torch_cuda_runtime_available,
+)
 
 UI_LANG_EN = "en"
 UI_LANG_ZH = "zh"
@@ -36,30 +40,19 @@ UI_LANGUAGES = (UI_LANG_EN, UI_LANG_ZH)
 
 
 def _lang() -> str:
-    lang = getattr(config, "ui_language", UI_LANG_EN) or UI_LANG_EN
+    lang = config.ui_language or UI_LANG_EN
     if lang not in UI_LANGUAGES:
         return UI_LANG_EN
     return lang
 
 
-def tr(key: str, *args, **fmt) -> str:
+def tr(key: str) -> str:
     '''Return localized UI text for the active ``config.ui_language``.'''
 
     entry = _STRINGS.get(key)
     if entry is None:
         return key
-    text = entry.get(_lang()) or entry.get(UI_LANG_EN) or key
-    if args and not fmt:
-        try:
-            return text % args if len(args) > 1 else text % args[0]
-        except TypeError:
-            return text
-    if fmt:
-        try:
-            return text % fmt
-        except (KeyError, TypeError):
-            return text
-    return text
+    return entry.get(_lang()) or entry.get(UI_LANG_EN) or key
 
 
 # --- Symmetry type display labels (canonical value -> localized label) ---
@@ -111,12 +104,6 @@ def preprocess_policy_option_text(policy_id: str) -> str:
     return policy_id
 
 
-def hardware_table_header(column: str) -> str:
-    '''Column title for the detected-hardware table.'''
-
-    return tr("hw.col_%s" % column)
-
-
 def hardware_status_label(status: str) -> str:
     '''Map English status from device.py to localized table text.'''
 
@@ -142,24 +129,15 @@ def engine_speed_hint_text(*, cuda_available: bool) -> str:
     return tr("hint.engine_speed_cpu")
 
 
-def kasalv1_usage_hint_text() -> str:
-    return tr("hint.kasalv1_usage")
-
-
-def kasalv1_block_reason_text(job: SymmetryJobSpec) -> str | None:
-    reason = kasalv1_job_blocked_reason(job)
+def kasalv1_block_reason_text(reason: str | None) -> str | None:
     if reason is None:
         return None
     if _lang() == UI_LANG_EN:
         return reason
-    sym_type = job.sym_type
-    if sym_type in ("None", ""):
-        return tr("hint.kasalv1_block_unlabeled")
-    return tr("hint.kasalv1_block_auto")
+    return tr("hint.kasalv1_block_unlabeled")
 
 
-def symmetry_routing_note_text(job: SymmetryJobSpec) -> str | None:
-    note = symmetry_job_routing_note(job)
+def symmetry_routing_note_text(note: str | None) -> str | None:
     if note is None:
         return None
     if _lang() == UI_LANG_EN:
@@ -168,56 +146,33 @@ def symmetry_routing_note_text(job: SymmetryJobSpec) -> str | None:
 
 
 def gpu_install_hint_text() -> str | None:
-    hint = gpu_install_hint_message()
-    if hint is None:
+    if torch_cuda_runtime_available():
         return None
-    if _lang() == UI_LANG_EN:
-        return hint
-    from kasal.device import detect_hardware_nvidia_gpus
-
     hardware = detect_hardware_nvidia_gpus()
     if not hardware:
         return None
     joined = "; ".join(hardware)
-    return tr(
-        "hint.gpu_install",
-        gpus=joined,
-        cmd=GPU_INSTALL_CMD,
-        doc=GPU_INSTALL_DOC,
-    )
+    return tr("hint.gpu_install") % (joined, GPU_INSTALL_CMD, GPU_INSTALL_DOC)
 
 
-def cuda_available_hint_text() -> str:
-    return tr("hint.cuda_available")
+def dataset_folder_error_text(error_key: str, path: str | None = None) -> str:
+    text = tr("folder_error.%s" % error_key)
+    return text if path is None else text % path
 
 
-def cpu_only_build_hint_text() -> str:
-    return tr("hint.cpu_only_build")
-
-
-def dataset_folder_error_text(error_key: str, **fmt) -> str:
-    return tr("folder_error.%s" % error_key, **fmt)
-
-
-def batch_status_text(status_key: str, **fmt) -> str:
+def batch_status_text(
+    status_key: str,
+    saved: int,
+    total: int,
+    unsaved: int,
+    engine: str | None = None,
+) -> str:
     '''Build a localized batch-status line shown on the KASAL panel.'''
 
-    saved_n = int(fmt.pop("saved", 0))
-    total_n = int(fmt.pop("total", 0))
-    unsaved_n = int(fmt.pop("unsaved", 0))
-    engine = fmt.pop("engine", None)
+    prefix = tr("batch.%s" % status_key)
     if engine is not None:
-        prefix = tr("batch.%s" % status_key, engine)
-    elif fmt:
-        prefix = tr("batch.%s" % status_key, **fmt)
-    else:
-        prefix = tr("batch.%s" % status_key)
-    suffix = tr(
-        "batch.status_suffix",
-        saved=saved_n,
-        total=total_n,
-        unsaved=unsaved_n,
-    )
+        prefix = prefix % engine
+    suffix = tr("batch.status_suffix") % (saved, total, unsaved, total)
     return "%s%s" % (prefix, suffix)
 
 
@@ -227,17 +182,11 @@ def batch_status_progress_text(
     mesh_name: str,
     engine: str,
 ) -> str:
-    return tr(
-        "batch.cal_all_progress",
-        index=index,
-        total=total,
-        mesh=mesh_name,
-        engine=engine,
-    )
+    return tr("batch.cal_all_progress") % (index, total, mesh_name, engine)
 
 
 def batch_status_skip_text(mesh_name: str, block_reason: str) -> str:
-    return tr("batch.cal_all_skip", mesh=mesh_name, reason=block_reason)
+    return tr("batch.cal_all_skip") % (mesh_name, block_reason)
 
 
 def cleared_labels_status_text(
@@ -246,8 +195,7 @@ def cleared_labels_status_text(
     objects: int,
     total: int,
 ) -> str:
-    return tr(
-        "batch.cleared_all",
+    return tr("batch.cleared_all") % (
         json_removed,
         ply_removed,
         objects,
@@ -446,10 +394,6 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "kasalv1 requires symmetry type and n-fold set in the UI (object is unlabeled).",
         "zh": "kasalv1 需要在界面中指定对称类型与 n 折（当前物体未标注）。",
     },
-    "hint.kasalv1_block_auto": {
-        "en": "kasalv1 requires a concrete symmetry type before it can compute.",
-        "zh": "kasalv1 需要已有具体对称类型后才能计算。",
-    },
     "hint.routing_unlabeled_kasalv2": {
         "en": "Unlabeled object: compute will use kasalv2 "
         "(kasalv1 requires user-set symmetry type and n-fold).",
@@ -457,11 +401,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "（kasalv1 需要用户指定的对称类型与 n 折）。",
     },
     "hint.gpu_install": {
-        "en": "NVIDIA GPU(s) detected on this PC (%(gpus)s), but the current conda env has "
+        "en": "NVIDIA GPU(s) detected on this PC (%s), but the current conda env has "
         "CPU-only PyTorch. GPU cannot be used until you reinstall the GPU build: "
-        "%(cmd)s (run inside KASAL/). See %(doc)s.",
-        "zh": "本机检测到 NVIDIA GPU（%(gpus)s），但当前 conda 环境为 CPU-only PyTorch。"
-        "需重装 GPU 版后方可使用 GPU：%(cmd)s（在 KASAL/ 目录内运行）。详见 %(doc)s。",
+        "%s (run inside KASAL/). See %s.",
+        "zh": "本机检测到 NVIDIA GPU（%s），但当前 conda 环境为 CPU-only PyTorch。"
+        "需重装 GPU 版后方可使用 GPU：%s（在 KASAL/ 目录内运行）。详见 %s。",
     },
     "hint.cuda_available": {
         "en": "CUDA is available. Select CPU or a listed GPU for kasalv2.",
@@ -500,20 +444,20 @@ _STRINGS: dict[str, dict[str, str]] = {
         "zh": "对称计算进行中，无法打开设置页。",
     },
     "batch.loaded_folder": {
-        "en": "Loaded folder: %(name)s (%(count)d objects)",
-        "zh": "已加载文件夹：%(name)s（%(count)d 个物体）",
+        "en": "Loaded folder: %s (%d objects)",
+        "zh": "已加载文件夹：%s（%d 个物体）",
     },
     "batch.status_suffix": {
-        "en": ": saved %(saved)d/%(total)d, unsaved %(unsaved)d/%(total)d.",
-        "zh": "：已保存 %(saved)d/%(total)d，未保存 %(unsaved)d/%(total)d。",
+        "en": ": saved %d/%d, unsaved %d/%d.",
+        "zh": "：已保存 %d/%d，未保存 %d/%d。",
     },
     "batch.cal_all_progress": {
-        "en": "Cal All %(index)d/%(total)d: %(mesh)s (engine=%(engine)s) ...",
-        "zh": "批量计算 %(index)d/%(total)d：%(mesh)s（引擎=%(engine)s）…",
+        "en": "Cal All %d/%d: %s (engine=%s) ...",
+        "zh": "批量计算 %d/%d：%s（引擎=%s）…",
     },
     "batch.cal_all_skip": {
-        "en": "Cal All skip %(mesh)s: %(reason)s",
-        "zh": "批量计算跳过 %(mesh)s：%(reason)s",
+        "en": "Cal All skip %s: %s",
+        "zh": "批量计算跳过 %s：%s",
     },
     "batch.cleared_all": {
         "en": "Cleared all labels: removed %d json, %d sym.ply across %d object(s). "

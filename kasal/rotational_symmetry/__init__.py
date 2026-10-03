@@ -7,12 +7,4 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
-from .analyzer import analyze_rotational_symmetry, seed_everything
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
-
-__all__ = [
-    "DEFAULT_ANALYSIS_CONFIG",
-    "SymmetryAnalysisConfig",
-    "analyze_rotational_symmetry",
-    "seed_everything",
-]
+# Import analysis functions from their modules so CLI discovery stays lightweight.

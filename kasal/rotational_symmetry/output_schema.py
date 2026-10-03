@@ -97,6 +97,9 @@ def normalize_symmetry_layer_for_output(raw_layer: dict[str, Any]) -> dict[str, 
 
 
 def build_analysis_result(raw_result: dict[str, Any], n_fold: Any) -> dict[str, Any]:
+    if raw_result.get("rot_sym_type") == "Error":
+        raise RuntimeError("Rotational symmetry classification did not produce a valid family.")
+
     sym_op = raw_result.get("sym_op", "none")
     n_fold_out = "inf" if sym_op == "symmetries_continuous" else normalize_n_fold_for_output(n_fold)
     analysis = {
@@ -149,17 +152,7 @@ def build_symmetry_output_layer(analysis: dict[str, Any]) -> dict[str, Any]:
 
 def build_model_output_json(analysis: dict[str, Any], bbox_info: dict[str, Any]) -> dict[str, Any]:
     result = dict(bbox_info)
-    result.update(
-        {
-            "has_rot_sym": analysis.get("has_rot_sym", False),
-            "rot_sym_type": analysis.get("sym_type"),
-            "n_fold": analysis.get("n_fold"),
-            "sym_op": analysis.get("sym_op"),
-            "rot_center": analysis.get("rot_center", [0.0, 0.0, 0.0]),
-            "rot_sym_axis": analysis.get("rot_sym_axis", []),
-        }
-    )
-    add_bop_symmetry_payload(result, analysis)
+    result.update(build_symmetry_output_layer(analysis))
 
     if TEXTURE_SYMMETRY_KEY in analysis:
         result[TEXTURE_SYMMETRY_KEY] = build_symmetry_output_layer(analysis[TEXTURE_SYMMETRY_KEY])

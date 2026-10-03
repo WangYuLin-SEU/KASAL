@@ -1,196 +1,152 @@
 <div align="center">
 
-**English** | [中文](./README_kasalv1_zh.md)
+**English** | [中文](README_kasalv1_zh.md) · [KASALv2 home](../README.md)
 
 </div>
 
-# KASAL (kasalv1) User Guide
+# KASAL (kasalv1) user guide
 
-This document describes the **classic kasalv1** interactive workflow (user-specified symmetry types, PyMeshLab-based preprocessing). The integrated GUI still supports these features alongside **KASALv2**.
+This guide covers the original user-guided KASAL workflow: the user supplies a symmetry type and order, and kasalv1 localizes the corresponding axes and rotation center. The current repository retains this workflow beside the automatic KASALv2 engine.
 
-**KASALv2 (new features)** → [Main README](../README.md) | [主 README（中文）](../README_zh.md)
+For automatic analysis, current GUI behavior, and command-line batches, use the [project README](../README.md#usage-essentials).
 
----
+## Availability
 
-# <img src="../kasal/datasets/K8.ico" width="36"> KASAL (kasalv1): Key-Axis-based Symmetry Axis Localization
+| Distribution | Contents | License |
+|--------------|----------|---------|
+| Current source repository | Integrated kasalv1 + KASALv2 application | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| [`kasal-6d` on PyPI](https://pypi.org/project/kasal-6d/) | Classic kasalv1 package | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
-KASAL is a project designed for determining the symmetry axis orientation and the rotation center of rotationally symmetric objects. When using KASAL, users need to specify one of the eight predefined rotational symmetry types. Based on the selected type, KASAL identifies all symmetry axes on the given object model. Upon completion of symmetry axis localization, KASAL automatically saves the rotational symmetry information in the [BOP format](https://bop.felk.cvut.cz/ "BOP Website"). This structured symmetry information facilitates seamless integration with 6D pose estimation methods that support the BOP format. Moreover, the extracted symmetry data is beneficial for various applications, including 3D reconstruction, object recognition, and related computer vision tasks.
+Install the classic package with:
 
-> **↩ Return to KASALv2** — You opened the kasalv1 manual from the KASALv2 guide.
-> **Back to:** [KASALv2 navigation table](../README.md#en-ret-nav-full) · [kasalv1 vs kasalv2 comparison](../README.md#en-ret-compare-kasalv1)
-
-### <img src="../kasal/datasets/K16.png" width="28"> News
-
-See the unified timeline in the [main README — Timeline](../README.md#timeline).
-
-- **Sep 2025**: KASAL officially supports **Windows** and **Ubuntu (Linux)**.
-- **Mar 2025**: Fully **open-sourced** on GitHub and PyPI.
-- **Dec 2024**: TIP 2024 paper — [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
-
-<a name="datasets"></a>
-
-### <img src="../kasal/datasets/K17.png" width="28"> Datasets
-
-> **↩ Return to KASALv2**
-> **Back to:** [Datasets (v2 overview)](../README.md#en-ret-nav-datasets)
-
-To identify which objects exhibit rotational symmetry, you can download the DSRSTO dataset provided with KASAL. Additionally, we have utilized KASAL to determine the symmetry axes of objects in the Google Scanned Objects (GSO) and ShapeNet datasets.
-
-Below are the links to these three datasets:
-
-* DSRSTO: https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset
-* GSO: https://huggingface.co/datasets/SEU-WYL/GSO-SAD
-* ShapeNet: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
-
-<a name="installation"></a>
-
-### <img src="../kasal/datasets/K9.png" width="28"> Installation
-
-> **↩ Return to KASALv2**
-> **Back to:** [Quick Start (v2)](../README.md#en-ret-nav-install) · [KASALv2 navigation table](../README.md#en-ret-nav-full)
-
-* **Platform Support**: KASAL supports both **Windows** and **Ubuntu (Linux)**
-
->| Platform | Tested Version |
->|----------|----------------|
->| Windows  | Windows 10     |
->| Ubuntu   | 20.04+ (glibc ≥ 2.31) |
-
-* **Requirements**: Anaconda 3, MeshLab
-
-* **Install via PyPI (kasalv1 package)**
-
-KASAL is available on **PyPI** as the classic **kasalv1** build. Integrated **KASALv2** is currently source-only and is not yet available on PyPI:
-
-```
+```bash
 pip install kasal-6d
 ```
 
-**License:** This **KASALv2** repository is under **[PolyForm Noncommercial 1.0.0](../LICENSE)**. The standalone **kasalv1** PyPI package (`pip install kasal-6d`) is under **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**.
+To run the integrated source application instead, follow [Install KASALv2 from source](install.md).
 
-* **Integrated repo (KASAL + kasalv2)**
+## Start the integrated GUI
 
-For **KASALv2** source install (requirements + demo), see [install_kasalv2.md](install_kasalv2.md). Full technical reference: [install.md](install.md). Quick summary: [main README Quick Start](../README.md#quick-start).
-
-* **Quick Start (classic GUI)**
-
-```
-python demo_texture_meshes.py
-# or
+```bash
 python demo_shape_meshes.py
 ```
 
-<a name="rotational-symmetry-types"></a>
+For textured examples:
 
-### <img src="../kasal/datasets/K10.png" width="28"> Rotational Symmetry Types
-
-> **↩ Return to KASALv2**
-> **Back to:** [Symmetry types — v2 navigation](../README.md#en-ret-nav-symmetry-types) · [Symmetry types — v2 feature details](../README.md#en-ret-detail-sym-types)
-
-KASAL supports a total of eight rotational symmetry types, which include three continuous rotational symmetries and five discrete rotational symmetries.
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/fig1.png" alt="">
-</div>
-
-In KASAL, you can select any rotational symmetry type from the **"Symmetry Type"** dropdown menu and then click **"Cal Current Obj"** to localize the symmetry axes on the object.
-
-Additionally, for **The n-fold Prismatic Rotational Symmetry** and **The n-fold Pyramidal Rotational Symmetry**, users must specify the order of rotational symmetry, denoted as *n*.
-
-<a name="symmetry-axis-localization-results"></a>
-
-### <img src="../kasal/datasets/K11.png" width="28"> Symmetry Axis Localization Results
-
-> **↩ Return to KASALv2**
-> **Back to:** [Visualization — v2 navigation](../README.md#en-ret-nav-visualization)
-
-Given a **regular dodecahedron** and its specified rotational symmetry type, KASAL can accurately determine the **orientations of all symmetry axes** and the **rotation center** on the object model.
-
-Furthermore, KASAL provides a **visual representation** of these symmetry axes, including their **directions, orders, and the rotation center**.
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/result-p20-1.png" alt="">
-</div>
-
-In the visualization of **symmetry axis directions** and the **rotation center**, KASAL places the **arrow's starting point at the rotation center** and aligns its **direction with the symmetry axis**.
-
-For the visualization of **symmetry axis order**, KASAL first generates a **set of transformation matrices** that satisfy the specified rotational symmetry. It then applies these matrices to **recolor the object's vertices** accordingly.
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/result-p20-2.png" alt="">
-</div>
-
-<a name="batch-processing"></a>
-
-### <img src="../kasal/datasets/K12.png" width="28"> Batch Processing
-
-> **↩ Return to KASALv2**
-> **Back to:** [Batch processing — v2 navigation](../README.md#en-ret-nav-batch) · [Cal All (unsaved) — v2 feature details](../README.md#en-ret-detail-cal-all)
-
-> **Note (integrated GUI):** In the **KASALv2** desktop app, **Cal All Objs** only processes **unsaved (dirty)** objects. The workflow below describes the **classic kasalv1** batch behavior.
-
-Given a directory path (e.g., `mesh_path`), KASAL will automatically load all 3D model files from the subfolders within this directory. You then need to manually specify each model's **symmetry type**, **order (if applicable)**, and whether it exhibits **texture rotational symmetry**.
-
-Once the rotational symmetry information for all objects has been determined, you can click **"Cal All Objs"** to perform batch symmetry axis localization for all models.
-
-Additionally, KASAL automatically saves the specified rotational symmetry information when switching between objects. However, for the **last object in the directory**, please switch back to the previous object to ensure the data is saved.
-
-If there is only **one object** in the directory, clicking **"Cal Current Obj"** or **"Cal All Objs"** will complete the symmetry axis localization and automatically save the specified symmetry information.
-
-For **KASALv2 Cal All (unsaved)** semantics, see the [main README](../README.md#en-ret-detail-cal-all).
-
+```bash
+python demo_texture_meshes.py
 ```
+
+You can also open your own dataset:
+
+```python
 from kasal.app.polyscope_app import app
 
-mesh_path = 'The directory of your 3D model dataset'
-
-app(mesh_path)
+app(r"C:\path\to\mesh_dataset")
 ```
 
-<a name="texture-rotational-symmetry"></a>
+The integrated GUI discovers PLY and OBJ files recursively. Other explicitly supplied formats supported by KASALv2 are listed in the [workflow overview](../README.md#choose-a-workflow).
 
-### <img src="../kasal/datasets/K13.png" width="28"> Texture Rotational Symmetry
+<a id="rotational-symmetry-types"></a>
 
-> **↩ Return to KASALv2**
-> **Back to:** [Texture ADI-C — v2 navigation](../README.md#en-ret-nav-texture) · [Texture / ADI-C — v2 feature details](../README.md#en-ret-detail-texture)
+## Rotational symmetry types
 
-In real-world scenarios, most rotationally symmetric objects exhibit **geometric rotational symmetry**, while a smaller number of objects possess **texture rotational symmetry**.
+KASAL uses eight canonical types: three continuous families and five discrete families.
 
-By default, KASAL employs a **geometry-based symmetry axis localization mode**. If an object exhibits texture rotational symmetry, users need to manually enable the **"ADI-C"** option.
+<p align="center">
+  <img src="../kasal/datasets/fig1.png" alt="Eight rotational symmetry types supported by KASAL" width="720">
+</p>
 
-<a name="assisted-localization"></a>
+| Label | User input |
+|-------|------------|
+| `C(>>1): Spherical Item` | Type |
+| `C(>1): Cylindrical Item` | Type |
+| `C(=1): Circular Item` | Type |
+| `D(>1): n-fold Prismatic Item` | Type and order *n* |
+| `D(=1): n-fold Pyramidal Item` | Type and order *n* |
+| `P(4): Tetrahedral Item` | Type |
+| `P(8): Octahedral Item` | Type |
+| `P(20): Icosahedral Item` | Type |
 
-### <img src="../kasal/datasets/K14.png" width="28"> Assisted Localization
+In the main panel:
 
-> **↩ Return to KASALv2**
-> **Back to:** [show xyz — v2 navigation](../README.md#en-ret-nav-assisted) · [Axis xyz (kasalv1) — v2 feature details](../README.md#en-ret-detail-assisted)
+1. Select a concrete **Symmetry Type**.
+2. Set *n* for an n-fold prismatic or pyramidal object.
+3. Choose **kasalv1** for the current-object engine.
+4. Click **Cal Current**.
 
-KASAL performs well for most objects, but it may encounter errors when handling **imperfect or approximately rotationally symmetric objects**.
+If the object is unlabeled, the integrated application routes it to KASALv2 even when kasalv1 was requested. This prevents a manual pipeline from running without its required type.
 
-If KASAL fails to correctly localize the symmetry axes, you can enable **"show xyz"** and manually select the **x, y, or z axis** that you believe is closest to the **primary key axis**.
+<a id="symmetry-axis-localization-results"></a>
 
-The **primary key axis** refers to the symmetry axis with the **highest order** on the object.
+## Localization results
 
-<div style="text-align: center;">
-  <img src="../kasal/datasets/show xyz.png" alt="">
-</div>
+KASAL estimates all axes implied by the supplied family and the shared rotation center. The visualization uses arrows for axis direction and vertex colors to distinguish symmetry order.
 
-<a name="citation"></a>
+<p align="center">
+  <img src="../kasal/datasets/result-p20-1.png" alt="Symmetry axes and rotation center on a regular dodecahedron" width="720">
+</p>
 
-### <img src="../kasal/datasets/K15.png" width="28"> Citation
+An arrow starts at the rotation center and points along its symmetry axis.
 
-If you use **kasalv1**, please cite the TIP 2024 paper. If you use **KASALv2**, cite the CVPR 2026 paper first — see [main README — Citation](../README.md#citation).
+<p align="center">
+  <img src="../kasal/datasets/result-p20-2.png" alt="Vertex-color visualization of rotational order" width="720">
+</p>
+
+Results are saved as `*_sym_type.json` and, when requested, `*_sym.ply`.
+
+<a id="texture-rotational-symmetry"></a>
+
+## Texture rotational symmetry
+
+Geometry can have a higher rotational order than its appearance. Enable **ADI-C** when texture or color should participate in symmetry evaluation. Use `demo_texture_meshes.py` for the bundled example.
+
+The integrated KASALv2 path stores texture-aware output separately under `texture_symmetry`; it does not replace the geometric result.
+
+<a id="assisted-localization"></a>
+
+## Assisted localization
+
+Approximately symmetric or imperfect meshes can make the primary axis ambiguous. Enable **show xyz** to display the canonical axes, then choose the X, Y, or Z axis closest to the expected primary key axis.
+
+<p align="center">
+  <img src="../kasal/datasets/show xyz.png" alt="Canonical XYZ axes used for assisted localization" width="720">
+</p>
+
+Selecting an axis override always routes computation to kasalv1. A concrete symmetry type is still required.
+
+<a id="batch-processing"></a>
+
+## Batch processing
+
+In the integrated application, **Cal All (unsaved)** processes only objects without a valid sidecar or objects edited since loading. Successful results are saved as each object completes.
+
+For repeatable non-interactive execution, use `python -m kasal.cli.run_job JOB.json`. It accepts the same manual fields through `defaults.sym_type`, `defaults.n_fold`, and `defaults.axis_xyz`.
+
+The separately distributed PyPI package preserves the classic kasalv1 application described on its [PyPI project page](https://pypi.org/project/kasal-6d/); its interface can differ from the integrated source application.
+
+<a id="datasets"></a>
+
+## Datasets
+
+- [DSRSTO](https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset)
+- [GSO-SAD](https://huggingface.co/datasets/SEU-WYL/GSO-SAD)
+- [ShapeNet-SAD](https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD)
+
+<a id="citation"></a>
+
+## Citation
 
 ```bibtex
 @ARTICLE{KASAL,
-  author = {Wang, Yulin and Luo, Chen},
-  title  = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture},
-  journal= {IEEE Transactions on Image Processing},
-  year   = {2024},
-  volume = {33},
-  pages  = {6720-6733},
-  doi    = {10.1109/TIP.2024.3515801}
+  author  = {Wang, Yulin and Luo, Chen},
+  title   = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture},
+  journal = {IEEE Transactions on Image Processing},
+  year    = {2024},
+  volume  = {33},
+  pages   = {6720--6733},
+  doi     = {10.1109/TIP.2024.3515801}
 }
 ```
 
----
+If you use the automatic KASALv2 method, also cite the CVPR 2026 paper listed in the [project README](../README.md#citation).

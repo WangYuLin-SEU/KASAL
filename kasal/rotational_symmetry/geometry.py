@@ -9,190 +9,12 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
-import open3d as o3d
 import torch
 from pytorch3d.ops import knn_points
 
-from .axis_templates import get_sym_axis_temp
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
-
-
-def build_rotation_transform(axis, theta, translation):
-    """Build a 4x4 rigid transform from axis-angle rotation and center offset."""
-
-    theta = np.deg2rad(theta)
-    axis = np.asarray(axis)
-    axis /= np.linalg.norm(axis)
-    cross_matrix = np.array(
-        [
-            [0, -axis[2], axis[1]],
-            [axis[2], 0, -axis[0]],
-            [-axis[1], axis[0], 0],
-        ]
-    )
-    rotation = np.eye(3) + np.sin(theta) * cross_matrix + (1 - np.cos(theta)) * np.dot(cross_matrix, cross_matrix)
-    transform = np.eye(4)
-    transform[:3, :3] = rotation
-    rotated_translation = np.dot(rotation, translation.reshape((3,)))
-    delta_translation = translation - rotated_translation
-    transform[:3, 3] = delta_translation
-    return transform
-
-
-def run_point_to_point_icp(source, target, voxel_size, *, config: SymmetryAnalysisConfig | None = None):
-    """Run point-to-point ICP for one transformed point cloud pair."""
-
-    cfg = DEFAULT_ANALYSIS_CONFIG if config is None else config
-    distance_threshold = voxel_size * cfg.refinement.icp_distance_factor
-    return o3d.pipelines.registration.registration_icp(
-        source,
-        target,
-        distance_threshold,
-        np.identity(4),
-        o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(
-            relative_fitness=cfg.refinement.icp_relative_fitness,
-            relative_rmse=cfg.refinement.icp_relative_rmse,
-            max_iteration=cfg.refinement.icp_max_iteration,
-        ),
-    )
-
-
-def refine_axis_center_with_icp(axis_info, model_input, center_ch, *, config: SymmetryAnalysisConfig | None = None):
-    """Refine the symmetry center and axis direction with ICP alignment."""
-
-    cfg = DEFAULT_ANALYSIS_CONFIG if config is None else config
-    voxel_size = model_input["diameter"] / cfg.refinement.voxel_size_divisor
-    downsample_size = voxel_size / cfg.refinement.downsample_divisor
-    refinement_vertices = model_input.get("refinement_points", model_input["vertices"])
-
-    target_pcd = o3d.geometry.PointCloud()
-    target_pcd.points = o3d.utility.Vector3dVector(refinement_vertices.astype(np.float32))
-    target_pcd = target_pcd.voxel_down_sample(downsample_size)
-
-    transforms = [np.eye(4)]
-    for axis_transform in axis_info["axis_mat"]:
-        source_pcd = o3d.geometry.PointCloud()
-        transformed_points = (
-            np.dot(axis_transform[:3, :3], refinement_vertices.T).T.astype(np.float32)
-            + axis_transform[:3, 3]
-        )
-        source_pcd.points = o3d.utility.Vector3dVector(transformed_points)
-        source_pcd = source_pcd.voxel_down_sample(downsample_size)
-        result = run_point_to_point_icp(source_pcd, target_pcd, voxel_size, config=cfg)
-        transforms.append(result.transformation)
-
-    centers = []
-    axes = []
-    for transform in transforms:
-        centers.append(np.dot(transform[:3, :3], center_ch) + transform[:3, 3])
-        axes.append(np.dot(transform[:3, :3], center_ch + axis_info["axis"]) - np.dot(transform[:3, :3], center_ch))
-
-    centers = np.array(centers)
-    axes = np.array(axes)
-    refined_center = np.mean(centers, axis=0)
-    refined_axis = np.mean(axes, axis=0)
-    refined_axis /= np.linalg.norm(refined_axis)
-    return refined_center, refined_axis
-
-
-def fibonacci_sampling(n_pts, radius=1.0):
-    """Sample near-uniform directions on a sphere using a Fibonacci lattice."""
-
-    assert n_pts % 2 == 1
-    n_pts_half = int(n_pts / 2)
-
-    golden_ratio = (math.sqrt(5.0) + 1.0) / 2.0
-    phi_inv = golden_ratio - 1.0
-    golden_angle = 2.0 * math.pi * phi_inv
-
-    pts = []
-    for i in range(-n_pts_half, n_pts_half + 1):
-        lat = math.asin((2 * i) / float(2 * n_pts_half + 1))
-        lon = (golden_angle * i) % (2 * math.pi)
-        s = math.cos(lat) * radius
-        x, y, z = math.cos(lon) * s, math.sin(lon) * s, math.tan(lat) * s
-        pts.append([x, y, z])
-    return pts
-
-
-def euler_matrix(ai, aj, ak, axes="sxyz"):
-    """Return a homogeneous rotation matrix from Euler angles and axis sequence."""
-
-    next_axis = [1, 2, 0, 1]
-    axes_to_tuple = {
-        "sxyz": (0, 0, 0, 0),
-        "sxyx": (0, 0, 1, 0),
-        "sxzy": (0, 1, 0, 0),
-        "sxzx": (0, 1, 1, 0),
-        "syzx": (1, 0, 0, 0),
-        "syzy": (1, 0, 1, 0),
-        "syxz": (1, 1, 0, 0),
-        "syxy": (1, 1, 1, 0),
-        "szxy": (2, 0, 0, 0),
-        "szxz": (2, 0, 1, 0),
-        "szyx": (2, 1, 0, 0),
-        "szyz": (2, 1, 1, 0),
-        "rzyx": (0, 0, 0, 1),
-        "rxyx": (0, 0, 1, 1),
-        "ryzx": (0, 1, 0, 1),
-        "rxzx": (0, 1, 1, 1),
-        "rxzy": (1, 0, 0, 1),
-        "ryzy": (1, 0, 1, 1),
-        "rzxy": (1, 1, 0, 1),
-        "ryxy": (1, 1, 1, 1),
-        "ryxz": (2, 0, 0, 1),
-        "rzxz": (2, 0, 1, 1),
-        "rxyz": (2, 1, 0, 1),
-        "rzyz": (2, 1, 1, 1),
-    }
-    tuple_to_axes = dict((v, k) for k, v in axes_to_tuple.items())
-
-    try:
-        firstaxis, parity, repetition, frame = axes_to_tuple[axes]
-    except (AttributeError, KeyError):
-        tuple_to_axes[axes]
-        firstaxis, parity, repetition, frame = axes
-
-    i = firstaxis
-    j = next_axis[i + parity]
-    k = next_axis[i - parity + 1]
-
-    if frame:
-        ai, ak = ak, ai
-    if parity:
-        ai, aj, ak = -ai, -aj, -ak
-
-    si, sj, sk = math.sin(ai), math.sin(aj), math.sin(ak)
-    ci, cj, ck = math.cos(ai), math.cos(aj), math.cos(ak)
-    cc, cs = ci * ck, ci * sk
-    sc, ss = si * ck, si * sk
-
-    matrix = np.identity(4)
-    if repetition:
-        matrix[i, i] = cj
-        matrix[i, j] = sj * si
-        matrix[i, k] = sj * ci
-        matrix[j, i] = sj * sk
-        matrix[j, j] = -cj * ss + cc
-        matrix[j, k] = -cj * cs - sc
-        matrix[k, i] = -sj * ck
-        matrix[k, j] = cj * sc + cs
-        matrix[k, k] = cj * cc - ss
-    else:
-        matrix[i, i] = cj * ck
-        matrix[i, j] = sj * sc - cs
-        matrix[i, k] = sj * cc + ss
-        matrix[j, i] = cj * sk
-        matrix[j, j] = sj * ss + cc
-        matrix[j, k] = sj * cs - sc
-        matrix[k, i] = -sj
-        matrix[k, j] = cj * si
-        matrix[k, k] = cj * ci
-    return matrix
+from kasal.geometry.transforms import rotation_about_axis
+from kasal.symmetry_lab.symmetry_axis_template import get_symmetry_axis_template
 
 
 def batched_chamfer_distance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -255,7 +77,7 @@ def rodrigues(axis: torch.Tensor, theta: torch.Tensor) -> torch.Tensor:
 def get_template_axis_angle(rot_sym_type, main_n_fold):
     """Measure the angle between the first two template axes of a symmetry family."""
 
-    axis_list = get_sym_axis_temp(rot_sym_type, main_n_fold)
+    axis_list = get_symmetry_axis_template(rot_sym_type, main_n_fold)
     if axis_list is None or len(axis_list) < 2:
         raise ValueError("The template must contain at least two axes.")
 
@@ -270,9 +92,9 @@ def get_template_axis_angle(rot_sym_type, main_n_fold):
 def generate_symmetry_transforms(main_n_fold, sym_type, primary_axis, secondary_axis, center_ch):
     """Generate all symmetry axes and discrete transforms from a template family."""
 
-    template_list = get_sym_axis_temp(sym_type, main_n_fold)
+    template_list = get_symmetry_axis_template(sym_type, main_n_fold)
     if not template_list:
-        raise ValueError(f"get_sym_axis_temp({sym_type}, {main_n_fold}) returned an empty template.")
+        raise ValueError(f"get_symmetry_axis_template({sym_type}, {main_n_fold}) returned an empty template.")
     if len(template_list) < 1 or any(len(entry["axis_l"]) == 0 for entry in template_list):
         raise ValueError("The symmetry template contains an empty axis list.")
 
@@ -312,7 +134,7 @@ def generate_symmetry_transforms(main_n_fold, sym_type, primary_axis, secondary_
             axis_model = normalize_vector(rotation_map @ axis_template)
             axes_model.append(axis_model)
             for k in range(1, div):
-                matrices_list.append(build_rotation_transform(axis_model, k * step_deg, center_ch))
+                matrices_list.append(rotation_about_axis(axis_model, k * step_deg, center_ch))
 
     return axes_model, matrices_list
 

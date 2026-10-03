@@ -1,11 +1,6 @@
-# KASAL dependencies — 4 files in requirements/
-#   base.txt, torch-cpu.txt, torch-gpu.txt, gui.txt
-#
-# Recommended:
-#   python scripts/install_deps.py full-cpu
-#   python scripts/install_deps.py full-gpu
-#
-# Plain pip example (full CPU):
-#   pip install -r requirements/base.txt -r requirements/torch-cpu.txt -r requirements/gui.txt
-#
-# See requirements/README.md and docs/install.md
+# Default: full-cpu. Equivalent to python scripts/install_deps.py full-cpu.
+# Other profiles and verification: requirements/README.md and docs/install.md.
+
+-r requirements/base.txt
+-r requirements/torch-cpu.txt
+-r requirements/gui.txt

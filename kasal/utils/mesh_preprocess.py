@@ -18,16 +18,37 @@ from typing import Any
 import numpy as np
 import trimesh
 
-import kasal.config.config as config
-from kasal.version_names import KASALV1_PREPROCESS, KASALV2_ENGINE, normalize_preprocess_policy
+import kasal.config.runtime as config
 from kasal.bop_toolkit_lib import misc
-from kasal.utils.io_ply_meshlab import is_pymeshlab_available, simplify_3DModel_v2
-from kasal.utils.mesh_preprocess_messages import MESH_PREPROCESS_ERROR_TEMPLATE
-from kasal.rotational_symmetry.model_preprocess import load_preprocessed_model
+from kasal.geometry.bounds import bounding_box_info
+from kasal.version_names import KASALV1_PREPROCESS, KASALV2_ENGINE, validate_preprocess_policy
+from kasal.geometry.mesh_simplification import is_pymeshlab_available, simplify_mesh
+from kasal.config.algorithms import DEFAULT_MESH_PREPROCESS_CONFIG, MeshPreprocessConfig
+from kasal.rotational_symmetry.model_preprocess import load_preprocessed_model, preprocess_mesh_geometry
 
 
-MIN_ANALYSIS_POINTS = 100
-SUPPORTED_MESH_SUFFIXES = (".ply", ".obj", ".glb", ".gltf", ".stl", ".off")
+MESH_PREPROCESS_ERROR_TEMPLATE = """[KASAL] Mesh preprocessing failed.
+
+Primary path (kasalv2) failed: {kasalv2_reason}
+Fallback path (PyMeshLab simplify_mesh) is not available: {pymeshlab_reason}
+
+You can:
+  (1) Install the FULL KASAL environment (includes PyMeshLab for legacy mesh simplify):
+      python scripts/install_deps.py full-cpu
+      or: python scripts/install_deps.py full-gpu
+      See docs/install.md section "Full vs Headless".
+
+  (2) Fix / standardize your mesh so kasalv2 can load it WITHOUT PyMeshLab:
+      - Use triangle mesh (no quads/ngons); watertight or near-watertight preferred
+      - Remove degenerate faces, duplicate vertices, zero-area triangles
+      - One connected component; reasonable scale (not near-zero bbox)
+      - Prefer .ply with valid face indices; for .obj ensure .mtl/texture paths exist if using ADI-C
+      - Re-export from Blender/MeshLab: "Export PLY" binary, merge vertices, recalculate normals
+
+  (3) Headless/server: use engine=kasalv2 in job JSON and fix the mesh; do not request engine=kasal without installing requirements/gui.txt.
+
+Mesh file: {mesh_path}
+"""
 
 
 class MeshPreprocessError(RuntimeError):
@@ -61,11 +82,6 @@ class MeshPreprocessResult:
     bbox_info: dict[str, float]
     preprocess_meta: dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def legacy_model(self) -> dict[str, Any]:
-        """Deprecated alias for kasalv1_model."""
-        return self.kasalv1_model
-
 
 def resolve_preprocess_policy(
     policy: str | None = None,
@@ -77,14 +93,16 @@ def resolve_preprocess_policy(
     if pymeshlab_available is None:
         pymeshlab_available = is_pymeshlab_available()
 
-    pol = normalize_preprocess_policy(policy or getattr(config, "mesh_preprocess_policy", "kasalv2_adaptive"))
+    pol = validate_preprocess_policy(
+        policy or config.mesh_preprocess_policy
+    )
     if pol == "kasalv2_strict":
         return True, False
     if pol == KASALV1_PREPROCESS:
         return False, False
     if pol == "kasalv2_adaptive":
         return True, bool(pymeshlab_available)
-    return True, bool(pymeshlab_available)
+    raise AssertionError(f"Unhandled mesh preprocessing policy: {pol}")
 
 
 def load_mesh_for_analysis(
@@ -92,6 +110,7 @@ def load_mesh_for_analysis(
     *,
     need_colors: bool = False,
     policy: str | None = None,
+    preprocess_config: MeshPreprocessConfig = DEFAULT_MESH_PREPROCESS_CONFIG,
 ) -> MeshPreprocessResult:
     """Load mesh for kasalv2 and/or kasalv1 analysis."""
 
@@ -102,8 +121,8 @@ def load_mesh_for_analysis(
     if prefer_kasalv2:
         try:
             model_input, bbox_info = load_preprocessed_model(path, need_colors=need_colors)
-            if len(model_input.get("analysis_points", [])) < MIN_ANALYSIS_POINTS:
-                raise ValueError(f"Too few analysis points (< {MIN_ANALYSIS_POINTS})")
+            if len(model_input.get("analysis_points", [])) < preprocess_config.min_analysis_points:
+                raise ValueError(f"Too few analysis points (< {preprocess_config.min_analysis_points})")
             diameter = float(model_input.get("diameter", 0.0))
             if not np.isfinite(diameter) or diameter <= 0:
                 raise ValueError(f"Invalid diameter: {diameter}")
@@ -125,9 +144,15 @@ def load_mesh_for_analysis(
                     mesh_path=path,
                     error_code="KASAL_MESH_KASALV2_FAILED",
                 ) from exc
-            return _attempt_kasalv1_fallback(path, need_colors=need_colors, meta=meta, kasalv2_reason=str(exc))
+            return _attempt_kasalv1_fallback(
+                path, need_colors=need_colors, meta=meta,
+                kasalv2_reason=str(exc), preprocess_config=preprocess_config,
+            )
 
-    return _attempt_kasalv1_fallback(path, need_colors=need_colors, meta=meta, kasalv2_reason="kasalv1 policy")
+    return _attempt_kasalv1_fallback(
+        path, need_colors=need_colors, meta=meta,
+        kasalv2_reason="kasalv1 policy", preprocess_config=preprocess_config,
+    )
 
 
 def _attempt_kasalv1_fallback(
@@ -136,6 +161,7 @@ def _attempt_kasalv1_fallback(
     need_colors: bool,
     meta: dict[str, Any],
     kasalv2_reason: str,
+    preprocess_config: MeshPreprocessConfig,
 ) -> MeshPreprocessResult:
     if not is_pymeshlab_available():
         raise MeshPreprocessError(
@@ -145,7 +171,19 @@ def _attempt_kasalv1_fallback(
             error_code="KASAL_MESH_PYMESHLAB_UNAVAILABLE",
         )
     try:
-        kasalv1_model = _load_kasalv1_model(path, need_colors=need_colors)
+        vertices, colors, faces, normals = simplify_mesh(
+            input_file=path,
+            target_face_count=preprocess_config.target_face_count,
+            subdivision_iterations=preprocess_config.subdivision_iterations,
+            need_colors=need_colors,
+        )
+        kasalv1_model = {
+            "vertices": vertices,
+            "colors": colors,
+            "faces": faces,
+            "normals": normals,
+            "diameter": misc.calc_pts_diameter(vertices),
+        }
     except Exception as exc:
         raise MeshPreprocessError(
             kasalv2_reason=kasalv2_reason,
@@ -158,7 +196,7 @@ def _attempt_kasalv1_fallback(
         backend="kasalv1",
         model_input={},
         kasalv1_model=kasalv1_model,
-        bbox_info=_bbox_from_kasalv1(kasalv1_model),
+        bbox_info=bounding_box_info(vertices, kasalv1_model["diameter"]),
         preprocess_meta={
             **meta,
             "backend": "kasalv1",
@@ -169,39 +207,6 @@ def _attempt_kasalv1_fallback(
     return enrich_mesh_bundle(result, need_colors=need_colors)
 
 
-def _load_kasalv1_model(path: str, *, need_colors: bool) -> dict:
-    vertices, colors, faces, normals = simplify_3DModel_v2(
-        input_file=path,
-        targetfacenum=40000,
-        color_op=need_colors,
-    )
-    model_i_ = {
-        "vertices": vertices,
-        "colors": colors,
-        "faces": faces,
-        "normals": normals,
-        "diameter": misc.calc_pts_diameter(vertices),
-    }
-    return model_i_
-
-
-def _bbox_from_kasalv1(kasalv1_model: dict) -> dict[str, float]:
-    verts = np.asarray(kasalv1_model["vertices"], dtype=np.float32)
-    vertex_min = verts.min(axis=0)
-    vertex_max = verts.max(axis=0)
-    size = vertex_max - vertex_min
-    diameter = float(kasalv1_model.get("diameter", 0.0))
-    return {
-        "diameter": diameter,
-        "min_x": float(vertex_min[0]),
-        "min_y": float(vertex_min[1]),
-        "min_z": float(vertex_min[2]),
-        "size_x": float(size[0]),
-        "size_y": float(size[1]),
-        "size_z": float(size[2]),
-    }
-
-
 def enrich_mesh_bundle(result: MeshPreprocessResult, *, need_colors: bool = False) -> MeshPreprocessResult:
     """Bidirectionally fill model_input and kasalv1_model."""
 
@@ -209,20 +214,16 @@ def enrich_mesh_bundle(result: MeshPreprocessResult, *, need_colors: bool = Fals
     model_input = dict(result.model_input)
     kasalv1_model = dict(result.kasalv1_model)
 
-    if result.backend == "kasalv1" and model_input == {}:
-        model_input = enrich_kasalv2_from_kasalv1({}, kasalv1_model, need_colors=need_colors)
-        applied.append("kasalv2_from_kasalv1")
-        result.preprocess_meta["mesh_topology"] = "kasalv1_simplified"
-    elif result.backend == "kasalv2" and kasalv1_model == {}:
-        kasalv1_model = enrich_kasalv1_from_kasalv2({}, model_input, need_colors=need_colors)
-        applied.append("kasalv1_from_kasalv2")
-        result.preprocess_meta.setdefault("mesh_topology", "kasalv2_raw")
-    elif result.backend == "kasalv2" and kasalv1_model:
-        kasalv1_model = enrich_kasalv1_from_kasalv2(kasalv1_model, model_input, need_colors=need_colors)
-        applied.append("kasalv1_from_kasalv2")
-    elif result.backend == "kasalv1" and model_input:
+    if result.backend == "kasalv1":
         model_input = enrich_kasalv2_from_kasalv1(model_input, kasalv1_model, need_colors=need_colors)
         applied.append("kasalv2_from_kasalv1")
+        if not result.model_input:
+            result.preprocess_meta["mesh_topology"] = "kasalv1_simplified"
+    elif result.backend == "kasalv2":
+        kasalv1_model = enrich_kasalv1_from_kasalv2(kasalv1_model, model_input, need_colors=need_colors)
+        applied.append("kasalv1_from_kasalv2")
+        if not result.kasalv1_model:
+            result.preprocess_meta.setdefault("mesh_topology", "kasalv2_raw")
 
     result.model_input = model_input
     result.kasalv1_model = kasalv1_model
@@ -245,17 +246,19 @@ def enrich_kasalv2_from_kasalv1(
     if verts is None or faces is None:
         return out
 
-    import tempfile
+    color_sources = None
+    colors = kasalv1_model.get("colors") if need_colors else None
+    if colors is not None:
+        colors = np.asarray(colors, dtype=np.float32)
+        if colors.ndim == 2 and len(colors) == len(verts) and colors.shape[1] >= 3:
+            color_sources = {"vertex_colors": colors[:, :3], "texture_available": True}
 
-    mesh = trimesh.Trimesh(
-        vertices=np.asarray(verts, dtype=np.float32),
-        faces=np.asarray(faces, dtype=np.int64),
-        process=False,
+    model_input_new, _ = preprocess_mesh_geometry(
+        np.asarray(verts, dtype=np.float32),
+        np.asarray(faces, dtype=np.uint32),
+        need_colors=need_colors,
+        color_sources=color_sources,
     )
-    with tempfile.NamedTemporaryFile(suffix=".ply", delete=False) as tmp:
-        tmp_path = tmp.name
-        mesh.export(tmp_path)
-    model_input_new, _ = load_preprocessed_model(tmp_path, need_colors=need_colors)
     out.update(model_input_new)
     out["diameter"] = kasalv1_model.get("diameter", out.get("diameter"))
     return out
@@ -277,7 +280,10 @@ def enrich_kasalv1_from_kasalv2(
 
     out["vertices"] = np.asarray(verts, dtype=np.float32)
     out["faces"] = np.asarray(faces, dtype=np.uint32)
-    out["diameter"] = float(model_input.get("diameter", misc.calc_pts_diameter(out["vertices"])))
+    diameter = model_input.get("diameter")
+    if diameter is None:
+        diameter = misc.calc_pts_diameter(out["vertices"])
+    out["diameter"] = float(diameter)
 
     mesh = trimesh.Trimesh(vertices=out["vertices"], faces=out["faces"].astype(np.int64), process=False)
     try:
@@ -286,18 +292,18 @@ def enrich_kasalv1_from_kasalv2(
         out["normals"] = np.zeros((len(out["vertices"]), 3), dtype=np.float32)
 
     n = len(out["vertices"])
-    # kasalv1 expects float32 colors in 0–255 (same as PyMeshLab simplify_3DModel_v2).
-    colors = np.ones((n, 4), dtype=np.float32) * 255.0
-    if need_colors and "analysis_colors" in model_input:
-        ac = np.asarray(model_input["analysis_colors"], dtype=np.float32)
-        if ac.ndim == 2 and ac.shape[1] >= 3:
-            if ac.max() <= 1.0:
-                ac = ac * 255.0
-            colors[:, :3] = ac[:n, :3]
-    out["colors"] = colors
+    colors = model_input.get("vertex_colors") if need_colors else None
+    if colors is not None:
+        colors = np.asarray(colors, dtype=np.float32)
+        if colors.ndim == 2 and len(colors) == n and colors.shape[1] >= 3:
+            rgb = colors[:, :3]
+            alpha_value = 255.0 if rgb.size and float(np.max(rgb)) > 1.5 else 1.0
+            alpha = np.full((n, 1), alpha_value, dtype=np.float32)
+            out["colors"] = np.concatenate((rgb, alpha), axis=1)
+        else:
+            out["colors"] = np.ones((n, 4), dtype=np.float32) * 255.0
+    else:
+        # analysis_colors belong to sampled surface points and cannot be mapped
+        # positionally onto raw mesh vertices.
+        out["colors"] = np.ones((n, 4), dtype=np.float32) * 255.0
     return out
-
-
-# Backward-compatible aliases (deprecated).
-enrich_kasalv2_from_legacy = enrich_kasalv2_from_kasalv1
-enrich_legacy_from_kasalv2 = enrich_kasalv1_from_kasalv2

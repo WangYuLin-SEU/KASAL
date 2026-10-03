@@ -17,11 +17,11 @@ import fpsample
 import numpy as np
 import trimesh
 
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
+from kasal.geometry.bounds import bounding_box_info
+
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
 
 
-PACKAGE_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = PACKAGE_ROOT.parent
 EXACT_DIAMETER_VERTEX_LIMIT = 25_000
 
 
@@ -45,7 +45,10 @@ def load_preprocessed_model(
             f"Unsupported model format: {suffix}. Supported: {', '.join(SUPPORTED_MESH_SUFFIXES)}"
         )
 
-    return _load_surface_candidate_model(path, need_colors=need_colors, config=cfg)
+    vertices, faces, color_sources = _load_mesh_geometry_and_color_sources(path, need_colors=need_colors)
+    return preprocess_mesh_geometry(
+        vertices, faces, need_colors=need_colors, color_sources=color_sources, config=cfg
+    )
 
 
 def _load_mesh_geometry_and_color_sources(
@@ -56,6 +59,61 @@ def _load_mesh_geometry_and_color_sources(
     if path.suffix.lower() == ".ply":
         return _load_ply_geometry_and_color_sources(path, need_colors=need_colors)
     return _load_generic_mesh_geometry_and_color_sources(path, need_colors=need_colors)
+
+
+def _collect_mesh_color_sources(
+    mesh: trimesh.Trimesh,
+    path: Path,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    *,
+    need_colors: bool,
+    accept_visual_vertex_kind: bool,
+    include_face_texture_uv: bool,
+) -> dict[str, Any]:
+    color_sources: dict[str, Any] = {"texture_available": False}
+    if not need_colors:
+        return color_sources
+
+    has_vertex_colors = (
+        accept_visual_vertex_kind and getattr(mesh.visual, "kind", None) == "vertex"
+    ) or _mesh_has_explicit_vertex_colors(mesh)
+    if has_vertex_colors:
+        colors = _ensure_rgb(np.asarray(mesh.visual.vertex_colors, dtype=np.float32))
+        if colors.ndim == 2 and len(colors) == len(vertices) and colors.shape[1] >= 3:
+            color_sources["vertex_colors"] = colors[:, :3].astype(np.float32, copy=False)
+            color_sources["texture_available"] = True
+
+    texture_image = getattr(getattr(mesh.visual, "material", None), "image", None)
+    texture_path = _infer_texture_path(path)
+    if texture_image is not None:
+        color_sources["texture_image"] = texture_image
+    if texture_path is not None:
+        color_sources["texture_path"] = texture_path
+
+    texture_available = texture_image is not None or texture_path is not None
+    texture_uv = getattr(mesh.visual, "uv", None)
+    if texture_available and texture_uv is not None:
+        texture_uv = np.asarray(texture_uv, dtype=np.float32)
+        if texture_uv.ndim == 2 and len(texture_uv) == len(vertices) and texture_uv.shape[1] >= 2:
+            color_sources["texture_uv"] = texture_uv[:, :2].astype(np.float32, copy=False)
+            color_sources["texture_available"] = True
+
+    if include_face_texture_uv and texture_available:
+        texture_uv_face = _load_face_texture_uv(mesh)
+        if (
+            texture_uv_face is not None
+            and texture_uv_face.ndim == 2
+            and len(texture_uv_face) == len(faces)
+            and texture_uv_face.shape[1] >= 6
+        ):
+            color_sources["texture_uv_face"] = texture_uv_face[:, :6].reshape(-1, 3, 2).astype(
+                np.float32,
+                copy=False,
+            )
+            color_sources["texture_available"] = True
+
+    return color_sources
 
 
 def _load_generic_mesh_geometry_and_color_sources(
@@ -76,38 +134,41 @@ def _load_generic_mesh_geometry_and_color_sources(
 
     vertices = np.asarray(mesh.vertices, dtype=np.float32)
     faces = np.asarray(mesh.faces, dtype=np.uint32).reshape(-1, 3)
-    color_sources: dict[str, Any] = {"texture_available": False}
-    if need_colors and _mesh_has_explicit_vertex_colors(mesh):
-        colors = _ensure_rgb(np.asarray(mesh.visual.vertex_colors, dtype=np.float32))
-        if colors.ndim == 2 and len(colors) == len(vertices) and colors.shape[1] >= 3:
-            color_sources["vertex_colors"] = colors[:, :3].astype(np.float32, copy=False)
-            color_sources["texture_available"] = True
-    texture_path = _infer_texture_path(path)
-    if texture_path is not None:
-        color_sources["texture_path"] = texture_path
+    color_sources = _collect_mesh_color_sources(
+        mesh,
+        path,
+        vertices,
+        faces,
+        need_colors=need_colors,
+        accept_visual_vertex_kind=True,
+        include_face_texture_uv=False,
+    )
     return vertices, faces, color_sources
 
 
-def _load_surface_candidate_model(
-    path: Path,
+def preprocess_mesh_geometry(
+    vertices: np.ndarray,
+    faces: np.ndarray,
     *,
-    need_colors: bool,
-    config: SymmetryAnalysisConfig,
+    need_colors: bool = False,
+    color_sources: dict[str, Any] | None = None,
+    config: SymmetryAnalysisConfig | None = None,
 ) -> tuple[Dict[str, Any], Dict[str, float]]:
-    vertices, faces, color_sources = _load_mesh_geometry_and_color_sources(path, need_colors=need_colors)
+    """Sample mesh geometry already in memory for symmetry analysis."""
+    cfg = DEFAULT_ANALYSIS_CONFIG if config is None else config
     if faces.shape[0] == 0:
-        raise ValueError(f"Surface candidate preprocessing requires triangle faces: {path}")
+        raise ValueError("Surface candidate preprocessing requires triangle faces.")
 
-    sample_count = max(int(config.sampling.fps_sample_count), 1)
-    candidate_multiplier = max(int(config.sampling.mesh_surface_candidate_multiplier), 1)
+    sample_count = max(int(cfg.sampling.fps_sample_count), 1)
+    candidate_multiplier = max(int(cfg.sampling.mesh_surface_candidate_multiplier), 1)
     candidate_count = max(sample_count, sample_count * candidate_multiplier)
     candidate_points, candidate_colors = _sample_mesh_surface_candidates(
         vertices,
         faces,
         candidate_count,
-        seed=int(config.seed.value),
-        fps_h=int(config.sampling.fps_h),
-        fps_start_idx=getattr(config.sampling, "fps_start_idx", None),
+        seed=int(cfg.seed.value),
+        fps_h=int(cfg.sampling.fps_h),
+        fps_start_idx=cfg.sampling.fps_start_idx,
         color_sources=color_sources if need_colors else None,
     )
     if len(candidate_points) <= sample_count:
@@ -117,8 +178,8 @@ def _load_surface_candidate_model(
         sample_idx = fpsample.bucket_fps_kdline_sampling(
             candidate_points,
             sample_count,
-            h=int(config.sampling.fps_h),
-            start_idx=_fps_start_arg(getattr(config.sampling, "fps_start_idx", None)),
+            h=int(cfg.sampling.fps_h),
+            start_idx=_fps_start_arg(cfg.sampling.fps_start_idx),
         )
         analysis_points = candidate_points[sample_idx, :].astype(np.float32, copy=False)
         analysis_colors = None if candidate_colors is None else candidate_colors[sample_idx, :].astype(
@@ -139,9 +200,12 @@ def _load_surface_candidate_model(
         if analysis_colors is None:
             analysis_colors = np.ones((len(analysis_points), 3), dtype=np.float32)
         model_input["analysis_colors"] = analysis_colors.astype(np.float32, copy=False)
+        vertex_colors = _vertex_colors_from_sources(vertices, faces, color_sources)
+        if vertex_colors is not None:
+            model_input["vertex_colors"] = vertex_colors
 
-    bbox_info = _bounding_box_info(vertices, diameter)
-    texture_path = color_sources.get("texture_path")
+    bbox_info = bounding_box_info(vertices, diameter)
+    texture_path = None if color_sources is None else color_sources.get("texture_path")
     if texture_path is not None:
         bbox_info["texture_path"] = str(texture_path)
     return model_input, bbox_info
@@ -155,38 +219,15 @@ def _load_ply_geometry_and_color_sources(
     mesh = trimesh.load(path, process=False, force="mesh")
     vertices = np.asarray(mesh.vertices, dtype=np.float32)
     faces = np.asarray(mesh.faces, dtype=np.uint32).reshape(-1, 3)
-    color_sources: dict[str, Any] = {"texture_available": False}
-    if not need_colors:
-        return vertices, faces, color_sources
-
-    if _mesh_has_explicit_vertex_colors(mesh):
-        colors = _ensure_rgb(np.asarray(mesh.visual.vertex_colors, dtype=np.float32))
-        if colors.ndim == 2 and len(colors) == len(vertices) and colors.shape[1] >= 3:
-            color_sources["vertex_colors"] = colors[:, :3].astype(np.float32, copy=False)
-            color_sources["texture_available"] = True
-
-    texture_image = getattr(getattr(mesh.visual, "material", None), "image", None)
-    texture_path = _infer_texture_path(path)
-    if texture_image is not None:
-        color_sources["texture_image"] = texture_image
-    if texture_path is not None:
-        color_sources["texture_path"] = texture_path
-
-    if (texture_image is not None or texture_path is not None) and getattr(mesh.visual, "uv", None) is not None:
-        texture_uv = np.asarray(mesh.visual.uv, dtype=np.float32)
-        if texture_uv.ndim == 2 and len(texture_uv) == len(vertices) and texture_uv.shape[1] >= 2:
-            color_sources["texture_uv"] = texture_uv[:, :2].astype(np.float32, copy=False)
-            color_sources["texture_available"] = True
-
-    texture_uv_face = _load_face_texture_uv(mesh)
-    if (texture_image is not None or texture_path is not None) and texture_uv_face is not None:
-        if texture_uv_face.ndim == 2 and len(texture_uv_face) == len(faces) and texture_uv_face.shape[1] >= 6:
-            color_sources["texture_uv_face"] = texture_uv_face[:, :6].reshape(-1, 3, 2).astype(
-                np.float32,
-                copy=False,
-            )
-            color_sources["texture_available"] = True
-
+    color_sources = _collect_mesh_color_sources(
+        mesh,
+        path,
+        vertices,
+        faces,
+        need_colors=need_colors,
+        accept_visual_vertex_kind=False,
+        include_face_texture_uv=True,
+    )
     return vertices, faces, color_sources
 
 
@@ -218,6 +259,57 @@ def _load_face_texture_uv(mesh: trimesh.Trimesh) -> np.ndarray | None:
     if arr.ndim == 2 and arr.shape[1] >= 6:
         return arr[:, :6]
     return None
+
+
+def _vertex_colors_from_sources(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    color_sources: dict[str, Any] | None,
+) -> np.ndarray | None:
+    """Return one RGB color per raw vertex for the kasalv1 compatibility path."""
+
+    if not color_sources:
+        return None
+
+    vertex_colors = color_sources.get("vertex_colors")
+    if vertex_colors is not None:
+        colors = _ensure_rgb(np.asarray(vertex_colors, dtype=np.float32))
+        if colors.ndim == 2 and len(colors) == len(vertices) and colors.shape[1] >= 3:
+            return colors[:, :3].astype(np.float32, copy=False)
+
+    texture_source = _texture_source(color_sources)
+    if texture_source is None:
+        return None
+
+    texture_uv = color_sources.get("texture_uv")
+    if texture_uv is not None:
+        uv = np.asarray(texture_uv, dtype=np.float32)
+        if uv.ndim == 2 and len(uv) == len(vertices) and uv.shape[1] >= 2:
+            return _sample_texture_colors(uv[:, :2], texture_source)
+
+    texture_uv_face = color_sources.get("texture_uv_face")
+    faces_arr = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    if texture_uv_face is None or len(faces_arr) == 0:
+        return None
+    face_uv = np.asarray(texture_uv_face, dtype=np.float32)
+    if face_uv.shape != (len(faces_arr), 3, 2):
+        return None
+    if faces_arr.min() < 0 or faces_arr.max() >= len(vertices):
+        return None
+
+    corner_colors = _sample_texture_colors(face_uv.reshape(-1, 2), texture_source).reshape(-1, 3)
+    vertex_ids = faces_arr.reshape(-1)
+    sums = np.zeros((len(vertices), 3), dtype=np.float32)
+    counts = np.zeros(len(vertices), dtype=np.int64)
+    np.add.at(sums, vertex_ids, corner_colors)
+    np.add.at(counts, vertex_ids, 1)
+    present = counts > 0
+    if not np.any(present):
+        return None
+    sums[present] /= counts[present, None]
+    fill_value = 255.0 if float(np.max(sums[present])) > 1.5 else 1.0
+    sums[~present] = fill_value
+    return sums
 
 
 def _fps_start_arg(start_idx: int | None):
@@ -281,19 +373,6 @@ def _sample_mesh_surface_candidates(
 ) -> tuple[np.ndarray, np.ndarray | None]:
     verts = np.asarray(vertices, dtype=np.float32).reshape(-1, 3)
     faces_arr = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
-    if sample_count <= 0:
-        return np.empty((0, 3), dtype=np.float32), None
-    if faces_arr.size == 0:
-        sample_idx = fpsample.bucket_fps_kdline_sampling(
-            verts,
-            min(sample_count, len(verts)),
-            h=fps_h,
-            start_idx=_fps_start_arg(fps_start_idx),
-        )
-        sampled_points = verts[sample_idx, :].astype(np.float32, copy=False)
-        sampled_colors = None if color_sources is None else _sample_vertex_colors(sample_idx, color_sources)
-        return sampled_points, sampled_colors
-
     triangles = verts[faces_arr]
     cross_prod = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
     face_areas = 0.5 * np.linalg.norm(cross_prod, axis=1)
@@ -358,7 +437,10 @@ def _estimate_analysis_diameter(vertices: np.ndarray, analysis_points: np.ndarra
 
 
 def _texture_source(color_sources: dict[str, Any]) -> Any:
-    return color_sources.get("texture_image") or color_sources.get("texture_path")
+    texture_image = color_sources.get("texture_image")
+    if texture_image is not None:
+        return texture_image
+    return color_sources.get("texture_path")
 
 
 def _sample_texture_colors(texture_uv: np.ndarray, texture_source: Any) -> np.ndarray:
@@ -367,10 +449,14 @@ def _sample_texture_colors(texture_uv: np.ndarray, texture_source: Any) -> np.nd
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError("Texture color sampling requires Pillow to be installed.") from exc
 
-    uv_image = Image.open(texture_source) if isinstance(texture_source, (str, Path)) else texture_source
+    if isinstance(texture_source, (str, Path)):
+        with Image.open(texture_source) as image:
+            uv_image = image.convert("RGB").copy()
+    else:
+        uv_image = texture_source
     uv_image = uv_image.resize((uv_image.size[0] * 2, uv_image.size[1] * 2))
     colors = trimesh.visual.color.uv_to_interpolated_color(texture_uv, uv_image)
-    return np.asarray(colors, dtype=np.float32) / 255.0
+    return _ensure_rgb(np.asarray(colors, dtype=np.float32))
 
 
 def _calc_exact_diameter(vertices: np.ndarray) -> float:
@@ -409,21 +495,6 @@ def _estimate_rotation_center(vertices: np.ndarray, faces: np.ndarray) -> np.nda
         return vertices.mean(axis=0).astype(np.float32)
     mesh = trimesh.Trimesh(vertices=vertices.astype(np.float32), faces=faces.astype(np.int64), process=False)
     return np.asarray(mesh.convex_hull.mass_properties["center_mass"], dtype=np.float32)
-
-
-def _bounding_box_info(vertices: np.ndarray, diameter: float) -> Dict[str, float]:
-    vertex_min = vertices.min(axis=0)
-    vertex_max = vertices.max(axis=0)
-    size = vertex_max - vertex_min
-    return {
-        "diameter": float(diameter),
-        "min_x": float(vertex_min[0]),
-        "min_y": float(vertex_min[1]),
-        "min_z": float(vertex_min[2]),
-        "size_x": float(size[0]),
-        "size_y": float(size[1]),
-        "size_z": float(size[2]),
-    }
 
 
 def _ensure_rgb(colors: np.ndarray) -> np.ndarray:

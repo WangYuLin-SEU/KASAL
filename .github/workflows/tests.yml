@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements/base.txt
+            requirements/test.txt
+      - name: Install test dependencies
+        run: python -m pip install -r requirements/base.txt -r requirements/test.txt
+      - name: Compile Python sources
+        run: python -m compileall -q kasal scripts demo_shape_meshes.py demo_texture_meshes.py
+      - name: Run regression tests
+        run: python -m pytest tests -q -p no:cacheprovider
+
+  pytorch3d-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements/torch-cpu.txt
+            requirements/torch-common.txt
+      - name: Install CPU runtime
+        run: python -m pip install -r requirements/torch-cpu.txt
+      - name: Verify PyTorch3D operator
+        env:
+          KASAL_TORCH_DEVICE: cpu
+        run: python scripts/verify_pytorch3d.py

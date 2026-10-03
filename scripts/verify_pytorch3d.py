@@ -13,25 +13,29 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def main() -> int:
+    from kasal.device import resolve_torch_device
+
     try:
         import torch
         from pytorch3d.ops import knn_points
     except ImportError as exc:
         print("FAIL:", exc, file=sys.stderr)
         print(
-            "Install PyTorch3D from MiroPsota — see KASAL/docs/install.md",
+            "Install PyTorch3D from MiroPsota — see docs/install.md",
             file=sys.stderr,
         )
         return 1
 
-    device = os.environ.get("KASAL_TORCH_DEVICE", "cuda")
-    if device == "cuda" and not torch.cuda.is_available():
-        device = "cpu"
+    device = resolve_torch_device("cuda")
     x = torch.zeros(1, 4, 3, device=device)
     knn_points(x, x, K=1)
     print("OK torch", torch.__version__, "| pytorch3d import | device", device)

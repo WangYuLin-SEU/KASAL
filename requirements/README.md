@@ -1,58 +1,87 @@
-# KASAL dependencies
+# KASAL dependency profiles
 
-**4 files** — profiles are combinations, not duplicate txt files:
+[Installation guide](../docs/install.md) · [中文安装指南](../docs/install_zh.md) · [Project home](../README.md)
+
+`scripts/install_deps.py` combines the dependency layers below into named profiles.
+The root `requirements.txt` is the plain-pip entry point for `full-cpu`.
 
 | File | Contents |
 |------|----------|
-| `base.txt` | Core (trimesh, open3d, fpsample, …) — no torch, no GUI |
-| `torch-cpu.txt` | CPU torch + pytorch3d |
-| `torch-gpu.txt` | GPU torch + pytorch3d (cu118) |
-| `gui.txt` | PyMeshLab + Polyscope **2.6.1** + opencv (add-on; **2.6.1+** for Chinese UI) |
+| `base.txt` | Core mesh, geometry, sampling, and image dependencies; no torch or GUI |
+| `torch-cpu.txt` | CPU PyTorch, torchvision, PyTorch3D, iopath, and fvcore |
+| `torch-gpu.txt` | CUDA 11.8 builds of the same torch stack |
+| `torch-common.txt` | Shared PyTorch3D index and dependency bounds; included by both torch profiles |
+| `gui.txt` | PyMeshLab, Polyscope 2.6.1, OpenCV, and platform GUI helpers |
+| `test.txt` | Pytest for contributors and CI; install a runtime profile first |
 
-`torch-cpu` and `torch-gpu` are **mutually exclusive** per environment.
-
-## Install (recommended)
-
-```powershell
-cd KASAL
-conda activate kasal
-python scripts/install_deps.py full-cpu
-```
+`torch-cpu.txt` and `torch-gpu.txt` are mutually exclusive.
 
 ## Profiles
 
-| Profile | Layers | Use case |
-|---------|--------|----------|
-| `base` | base | Legacy only, no kasalv2 |
-| `torch-cpu` / `torch-gpu` | torch | Add torch stack only |
-| `gui` | gui | Add GUI to existing env |
-| `headless-cpu` / `cpu` | base + torch-cpu | Server / batch CPU |
-| `headless-gpu` / `gpu` | base + torch-gpu | Server / batch GPU |
-| **`full-cpu`** | base + torch-cpu + gui | **Desktop CPU** |
-| **`full-gpu`** | base + torch-gpu + gui | **Desktop GPU** |
+| Profile | Files | Intended use |
+|---------|-------|--------------|
+| `base` | base | Core/legacy dependencies only |
+| `torch-cpu` | torch-cpu | Add only the CPU torch stack |
+| `torch-gpu` | torch-gpu | Add only the CUDA torch stack |
+| `gui` | gui | Add only desktop dependencies |
+| `test` | test | Add only the test runner |
+| `headless-cpu`, `cpu` | base + torch-cpu | CPU command-line processing |
+| `headless-gpu`, `gpu` | base + torch-gpu | CUDA command-line processing |
+| `full-cpu` | base + torch-cpu + gui | Complete CPU desktop application |
+| `full-gpu` | base + torch-gpu + gui | Complete CUDA desktop application |
 
-(`cpu` = `headless-cpu`, `gpu` = `headless-gpu`)
+## Install a profile
 
-## Plain pip (no script)
-
-```powershell
-pip install -r requirements/base.txt -r requirements/torch-cpu.txt -r requirements/gui.txt
+```bash
+python scripts/install_deps.py full-cpu
 ```
 
-## Chinese UI (polyscope)
+Use `full-gpu` only for a compatible NVIDIA/CUDA environment. A dry run prints the pip command without installing:
 
-Setup/KASAL **中文** mode needs `polyscope==2.6.1` (pinned in `gui.txt`). Older `2.3.x` cannot build CJK glyphs → labels show as `□` / `????`.
-
-```powershell
-python -m pip install -r requirements/gui.txt
-# or upgrade only:
-python -m pip install --upgrade polyscope==2.6.1
+```bash
+python scripts/install_deps.py full-cpu --dry-run
 ```
 
-Optional: `KASAL_UI_FONT` points to a `.ttf`/`.ttc`. Default search includes Windows fonts, Linux Noto/WQY paths, and `fc-list :lang=zh`.
+The equivalent plain-pip command is:
 
-**Linux GUI** (not installed by pip): system packages for OpenGL/X11, `python3-tk` or `zenity`/`kdialog`, and `fonts-noto-cjk` for Chinese UI. See [../docs/install.md](../docs/install.md#linux-ubuntu-2004-gui-system-packages).
+```bash
+python -m pip install -r requirements.txt
+```
 
-**KASALv2 source install tutorial:** [../docs/install_kasalv2.md](../docs/install_kasalv2.md) (English) · [../docs/install_kasalv2_zh.md](../docs/install_kasalv2_zh.md) (中文)
+After installing a CPU or GPU profile, verify the actual PyTorch3D operator:
 
-Full technical reference: [../docs/install.md](../docs/install.md)
+```bash
+python scripts/verify_pytorch3d.py
+```
+
+The regression suite needs only `base.txt` and `test.txt`, matching CI:
+
+```bash
+python -m pip install -r requirements/base.txt -r requirements/test.txt
+python -m pytest tests -q
+```
+
+If a runtime profile is already installed, add only the runner with
+`python scripts/install_deps.py test`.
+
+The suite prioritizes file-to-result workflows: a real CPU kasalv1 job, CLI and
+dataset exports, annotation reload/edit/save, and STEP parsing through axis
+inference. The v2 workflow tests replace only the expensive symmetry search;
+mesh preprocessing and JSON/PLY output use the real implementations. GUI tests
+replace native window libraries and worker processes. Format rejection, device
+selection and failed writes retain small boundary checks where a successful
+workflow cannot establish the contract.
+
+Run individual files for affected areas, for example
+`python -m pytest tests/test_cli_run_job.py tests/test_annotation_state.py -q`.
+The default suite does not validate full v2 classification accuracy, CUDA kernels,
+or interactive window rendering. Use `scripts/verify_pytorch3d.py` in the selected
+CPU/GPU environment for the real operator smoke check.
+
+## Notes
+
+- KASALv2 requires one torch layer; `base` alone cannot run the automatic engine.
+- The desktop GUI requires `gui.txt`.
+- Headless profiles omit PyMeshLab, so use `kasalv2_strict` preprocessing.
+- Chinese UI requires the pinned `polyscope==2.6.1` and a CJK font. Set `KASAL_UI_FONT` only when automatic font discovery is insufficient.
+- Exact pinned torch and PyTorch3D versions are documented in the [installation guide](../docs/install.md#pytorch3d-packages).

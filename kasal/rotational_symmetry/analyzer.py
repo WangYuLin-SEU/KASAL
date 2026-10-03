@@ -13,17 +13,18 @@ import random
 
 import numpy as np
 
+from kasal.geometry.o3d_icp import refine_axis_center
+from kasal.geometry.transforms import rotation_about_axis
+from kasal.utils.compute_progress import report_compute_stage
 from .axis_search import search_primary_axis, search_secondary_axis_at_angle
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
 from .consistency import geom_pi_axis_consistency_ok
 from .contour import classify_circle_vs_polygon, extract_flattened_contour_uv_from_mesh
 from .geometry import (
-    build_rotation_transform,
     compute_axis_rotation_loss,
     generate_symmetry_transforms,
     get_template_axis_angle,
     normalize_vector,
-    refine_axis_center_with_icp,
 )
 from .periodicity import estimate_axis_periodicity
 
@@ -79,7 +80,7 @@ def build_axis_info(axis, center_ch, rotation_angle_deg):
 
     return {
         "axis": axis,
-        "axis_mat": [build_rotation_transform(axis, rotation_angle_deg, center_ch)],
+        "axis_mat": [rotation_about_axis(axis, rotation_angle_deg, center_ch)],
     }
 
 
@@ -95,7 +96,13 @@ def refine_secondary_twofold_axis(model_input, pts, primary_axis, center_ch, *, 
         center_ch=center_ch,
         config=config,
     )
-    refined_center, refined_axis = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=config)
+    refined_center, refined_axis = refine_axis_center(
+        axis_info,
+        model_input.get("refinement_points", model_input["vertices"]),
+        model_input["diameter"],
+        center_ch,
+        config=config.refinement,
+    )
     loss = compute_axis_rotation_loss(
         pts,
         refined_axis,
@@ -117,22 +124,6 @@ def refine_secondary_twofold_axis(model_input, pts, primary_axis, center_ch, *, 
     return axis_info, refined_center, refined_axis, loss, exists, ok_2fold
 
 
-def _progress_stage(key: str, label: str, fraction: float) -> None:
-    try:
-        from kasal.utils.compute_progress import (
-            get_compute_progress,
-            progress_pulse,
-            progress_reporting_enabled,
-        )
-
-        pg = get_compute_progress()
-        if progress_reporting_enabled():
-            pg.set_stage(key, label, fraction=fraction, indeterminate=False)
-            progress_pulse()
-    except Exception:
-        pass
-
-
 def analyze_rotational_symmetry(model_input, tex=False, config: SymmetryAnalysisConfig | None = None):
     """Run symmetry analysis from a fully prepared model dictionary."""
 
@@ -141,7 +132,7 @@ def analyze_rotational_symmetry(model_input, tex=False, config: SymmetryAnalysis
     sampled_points = model_input["analysis_points"]
     rotation_center = model_input["rotation_center"]
 
-    _progress_stage("axis_search", "Searching primary symmetry axis", 0.42)
+    report_compute_stage("axis_search", "Searching primary symmetry axis", fraction=0.42)
     has_rot_sym, rot_sym_type, main_n_fold, axis_1, axis_2, center_ch, sym_op = classify_rotational_symmetry_family(
         model_input,
         sampled_points,
@@ -164,11 +155,11 @@ def analyze_rotational_symmetry(model_input, tex=False, config: SymmetryAnalysis
         "sym_op": sym_op,
     }
 
-    _progress_stage("classify", "Classifying symmetry family", 0.72)
+    report_compute_stage("classify", "Classifying symmetry family", fraction=0.72)
     if has_rot_sym and tex is True:
         from .texture import refine_symmetry_with_texture
 
-        _progress_stage("texture", "Texture / ADI-C refinement", 0.82)
+        report_compute_stage("texture", "Texture / ADI-C refinement", fraction=0.82)
         colors_ = model_input["analysis_colors"]
         tex_result, tex_n_fold = refine_symmetry_with_texture(
             sampled_points,
@@ -260,7 +251,13 @@ def classify_rotational_symmetry_family(
 
     discrete_rotation_deg = estimate_discrete_rotation_angle(n_fft, config=cfg)
     axis_info = build_axis_info(best_axis, center_ch, discrete_rotation_deg)
-    center_ch, best_axis = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=cfg)
+    center_ch, best_axis = refine_axis_center(
+        axis_info,
+        model_input.get("refinement_points", model_input["vertices"]),
+        model_input["diameter"],
+        center_ch,
+        config=cfg.refinement,
+    )
 
     dominant_axis_loss = compute_axis_rotation_loss(
         pts,
@@ -355,7 +352,13 @@ def classify_rotational_symmetry_family(
         poly_label = labels.icosahedral
         poly_angle = get_template_axis_angle(poly_label, None)
         axis_info = search_secondary_axis_at_angle(poly_angle, pts, best_axis, div=5, center_ch=center_ch, config=cfg)
-        refined_center, best_axis2 = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=cfg)
+        refined_center, best_axis2 = refine_axis_center(
+            axis_info,
+            model_input.get("refinement_points", model_input["vertices"]),
+            model_input["diameter"],
+            center_ch,
+            config=cfg.refinement,
+        )
         loss = compute_axis_rotation_loss(
             pts,
             best_axis2,
@@ -373,7 +376,13 @@ def classify_rotational_symmetry_family(
             center_ch=center_ch,
             config=cfg,
         )
-        refined_center, best_axis2 = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=cfg)
+        refined_center, best_axis2 = refine_axis_center(
+            axis_info,
+            model_input.get("refinement_points", model_input["vertices"]),
+            model_input["diameter"],
+            center_ch,
+            config=cfg.refinement,
+        )
         loss = axis_info["best_loss"]
         exists = loss < secondary_axis_loss_threshold
         ok_2fold = geom_pi_axis_consistency_ok(
@@ -388,7 +397,13 @@ def classify_rotational_symmetry_family(
             ceil_ratio=cfg.consistency.ceil_ratio,
         )
         if exists and ok_2fold:
-            refined_center, best_axis2 = refine_axis_center_with_icp(axis_info, model_input, refined_center, config=cfg)
+            refined_center, best_axis2 = refine_axis_center(
+                axis_info,
+                model_input.get("refinement_points", model_input["vertices"]),
+                model_input["diameter"],
+                refined_center,
+                config=cfg.refinement,
+            )
             return True, labels.prismatic, 5, best_axis, best_axis2, refined_center, sym_op
         return True, labels.pyramidal, 5, best_axis, best_axis, refined_center, sym_op
 
@@ -396,7 +411,13 @@ def classify_rotational_symmetry_family(
         poly_label = labels.octahedral
         poly_angle = get_template_axis_angle(poly_label, None)
         axis_info = search_secondary_axis_at_angle(poly_angle, pts, best_axis, div=4, center_ch=center_ch, config=cfg)
-        refined_center, best_axis2 = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=cfg)
+        refined_center, best_axis2 = refine_axis_center(
+            axis_info,
+            model_input.get("refinement_points", model_input["vertices"]),
+            model_input["diameter"],
+            center_ch,
+            config=cfg.refinement,
+        )
         loss = compute_axis_rotation_loss(
             pts,
             best_axis2,
@@ -421,7 +442,13 @@ def classify_rotational_symmetry_family(
         poly_label = labels.tetrahedral
         poly_angle = get_template_axis_angle(poly_label, None)
         axis_info = search_secondary_axis_at_angle(poly_angle, pts, best_axis, div=3, center_ch=center_ch, config=cfg)
-        refined_center, best_axis2 = refine_axis_center_with_icp(axis_info, model_input, center_ch, config=cfg)
+        refined_center, best_axis2 = refine_axis_center(
+            axis_info,
+            model_input.get("refinement_points", model_input["vertices"]),
+            model_input["diameter"],
+            center_ch,
+            config=cfg.refinement,
+        )
         loss = compute_axis_rotation_loss(
             pts,
             best_axis2,

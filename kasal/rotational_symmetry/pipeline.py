@@ -12,34 +12,24 @@ from __future__ import annotations
 import csv
 import json
 import multiprocessing as mp
+import os
 import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from .config import DEFAULT_ANALYSIS_CONFIG, SymmetryAnalysisConfig
-from .device import apply_device_to_config
-from .progress_tracker import finish_progress, init_progress, update_progress
+from kasal.utils.io_json import write_json
+from kasal.utils.atomic_file import atomic_output_path
+
+from kasal.config.algorithms import DEFAULT_ANALYSIS_CONFIG, build_analysis_config
+from kasal.device import resolve_torch_device
 from .output_schema import (
     SUMMARY_CSV_FIELDS,
     build_analysis_result,
     build_model_output_json,
     build_summary_csv_row,
 )
-
-
-def object_name_from_mesh(input_model: Path) -> str:
-    return input_model.stem
-
-
-def discover_dataset_meshes(
-    input_dir: Path,
-    *,
-    pattern: str,
-) -> list[Path]:
-    return sorted(input_dir.glob(pattern))
 
 
 def select_chunk(
@@ -62,28 +52,11 @@ def select_chunk(
     return meshes[resolved_start:end], resolved_start, resolved_count
 
 
-def build_analysis_config(fps_sample_count: int | None) -> SymmetryAnalysisConfig:
-    if fps_sample_count is None:
-        base = DEFAULT_ANALYSIS_CONFIG
-    else:
-        base = replace(
-            DEFAULT_ANALYSIS_CONFIG,
-            sampling=replace(DEFAULT_ANALYSIS_CONFIG.sampling, fps_sample_count=int(fps_sample_count)),
-        )
-    return apply_device_to_config(base)
-
-
 def _relative_path(path: Path, root: Path) -> str:
     try:
         return str(path.relative_to(root))
     except ValueError:
         return str(path)
-
-
-def _format_texture_status(item: dict[str, Any]) -> str:
-    if item.get("tex_has_rot_sym") is None and item.get("tex_sym_type") is None:
-        return ""
-    return f" | tex_type={item.get('tex_sym_type')} | tex_fold={item.get('tex_n_fold')}"
 
 
 def process_one_dataset_model(
@@ -93,18 +66,20 @@ def process_one_dataset_model(
     tex: bool,
     fps_sample_count: int | None,
 ) -> dict[str, Any]:
-    from rotational_symmetry.analyzer import analyze_rotational_symmetry
-    from rotational_symmetry.model_preprocess import load_preprocessed_model
-
     input_path = Path(input_model)
     input_root_path = Path(input_root)
     output_root_path = Path(output_root)
-    object_name = object_name_from_mesh(input_path)
+    object_name = input_path.stem
     object_output_dir = output_root_path / object_name
-    object_output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        analysis_config = build_analysis_config(fps_sample_count)
+        from .analyzer import analyze_rotational_symmetry
+        from .model_preprocess import load_preprocessed_model
+
+        analysis_config = build_analysis_config(
+            device=resolve_torch_device(DEFAULT_ANALYSIS_CONFIG.axis_search.device),
+            fps_sample_count=fps_sample_count,
+        )
         preprocess_started_at = time.time()
         model_input, bbox_info = load_preprocessed_model(
             input_path=input_path,
@@ -122,10 +97,8 @@ def process_one_dataset_model(
         postprocess_started_at = time.time()
         result = build_model_output_json(analysis, bbox_info)
         output_json = object_output_dir / f"{input_path.stem}_bop.json"
-        output_json.write_text(
-            json.dumps(result, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        object_output_dir.mkdir(parents=True, exist_ok=True)
+        write_json(output_json, result, ensure_ascii=False)
         postprocess_elapsed_sec = time.time() - postprocess_started_at
 
         return {
@@ -149,26 +122,49 @@ def process_one_dataset_model(
             "error": None,
         }
     except Exception:
-        return {
-            "object": object_name,
-            "model": input_path.name,
-            "model_relpath": _relative_path(input_path, input_root_path),
-            "output": None,
-            "has_rot_sym": False,
-            "sym_type": None,
-            "n_fold": None,
-            "sym_op": "error",
-            "tex_has_rot_sym": None,
-            "tex_sym_type": None,
-            "tex_n_fold": None,
-            "tex_sym_op": None,
-            "preprocess_sec": None,
-            "analysis_sec": None,
-            "postprocess_sec": None,
-            "total_sec": None,
-            "success": False,
-            "error": traceback.format_exc(),
-        }
+        return _failed_dataset_result(
+            object_name,
+            traceback.format_exc(),
+            model=input_path.name,
+            model_relpath=_relative_path(input_path, input_root_path),
+        )
+
+
+def _failed_dataset_result(object_name, error, *, model=None, model_relpath=None) -> dict[str, Any]:
+    """Use the same failure record for model errors and worker failures."""
+
+    return {
+        "object": object_name,
+        "model": model,
+        "model_relpath": model_relpath,
+        "output": None,
+        "has_rot_sym": False,
+        "sym_type": None,
+        "n_fold": None,
+        "sym_op": "error",
+        "tex_has_rot_sym": None,
+        "tex_sym_type": None,
+        "tex_n_fold": None,
+        "tex_sym_op": None,
+        "preprocess_sec": None,
+        "analysis_sec": None,
+        "postprocess_sec": None,
+        "total_sec": None,
+        "success": False,
+        "error": error,
+    }
+
+
+def _print_dataset_progress(item, index, total, success_count, started_at) -> None:
+    elapsed = max(time.time() - started_at, 1e-6)
+    eta = elapsed / index * (total - index)
+    status = "ok" if item["success"] else "error"
+    print(
+        f"[DATASET] progress {index}/{total} ({100.0 * index / total:.1f}%) | "
+        f"ok={success_count} fail={index - success_count} | last={item['object']} ({status}) | "
+        f"elapsed={elapsed:.1f}s eta={eta:.1f}s",
+        flush=True,
+    )
 
 
 def run_dataset_batch(
@@ -180,95 +176,67 @@ def run_dataset_batch(
     workers: int,
     fps_sample_count: int | None,
 ) -> list[dict[str, Any]]:
-    tasks = [
-        (
-            str(input_model),
-            str(input_root),
-            str(output_root),
-            tex,
-            fps_sample_count,
-        )
-        for input_model in input_models
-    ]
-
-    total = len(tasks)
-    init_progress(
-        output_root,
-        total=total,
-        workers=workers,
-        input_dir=str(input_root),
-    )
+    total = len(input_models)
+    started_at = time.time()
+    success_count = 0
+    summary = []
     print(
         f"[DATASET] START total={total} workers={workers} output={output_root}",
         flush=True,
     )
 
     if workers <= 1:
-        summary = []
-        for index, task in enumerate(tasks, start=1):
-            object_name = object_name_from_mesh(Path(task[0]))
+        for index, input_model in enumerate(input_models, start=1):
+            object_name = input_model.stem
             print(f"[DATASET] processing: {object_name}", flush=True)
-            item = process_one_dataset_model(*task)
-            update_progress(output_root, item=item, index=index, total=total)
+            item = process_one_dataset_model(
+                str(input_model), str(input_root), str(output_root), tex, fps_sample_count
+            )
             summary.append(item)
-        finish_progress(output_root, success_count=sum(1 for x in summary if x["success"]), total=total)
-        return sorted(summary, key=lambda item: item["object"])
+            success_count += int(item["success"])
+            _print_dataset_progress(item, index, total, success_count, started_at)
+    else:
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as executor:
+            future_to_object = {
+                executor.submit(
+                    process_one_dataset_model,
+                    str(input_model), str(input_root), str(output_root), tex, fps_sample_count,
+                ): input_model.stem
+                for input_model in input_models
+            }
+            for index, future in enumerate(as_completed(future_to_object), start=1):
+                object_name = future_to_object[future]
+                try:
+                    item = future.result()
+                except Exception:
+                    item = _failed_dataset_result(object_name, traceback.format_exc())
+                summary.append(item)
+                success_count += int(item["success"])
+                _print_dataset_progress(item, index, total, success_count, started_at)
 
-    summary = []
-    ctx = mp.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as executor:
-        future_to_object = {
-            executor.submit(process_one_dataset_model, *task): object_name_from_mesh(Path(task[0]))
-            for task in tasks
-        }
-        for index, future in enumerate(as_completed(future_to_object), start=1):
-            object_name = future_to_object[future]
-            try:
-                item = future.result()
-            except Exception:
-                item = {
-                    "object": object_name,
-                    "model": None,
-                    "model_relpath": None,
-                    "output": None,
-                    "has_rot_sym": False,
-                    "sym_type": None,
-                    "n_fold": None,
-                    "sym_op": "error",
-                    "tex_has_rot_sym": None,
-                    "tex_sym_type": None,
-                    "tex_n_fold": None,
-                    "tex_sym_op": None,
-                    "preprocess_sec": None,
-                    "analysis_sec": None,
-                    "postprocess_sec": None,
-                    "total_sec": None,
-                    "success": False,
-                    "error": traceback.format_exc(),
-                }
-            update_progress(output_root, item=item, index=index, total=total)
-            summary.append(item)
-
-    finish_progress(
-        output_root,
-        success_count=sum(1 for x in summary if x["success"]),
-        total=total,
-    )
+    print(f"[DATASET] COMPLETE {success_count}/{total} succeeded", flush=True)
     return sorted(summary, key=lambda item: item["object"])
 
 
 def write_dataset_summary(output_dir: Path, summary: list[dict[str, Any]]) -> tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
     summary_json = output_dir / "batch_summary.json"
-    summary_json.write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
     summary_csv = output_dir / "batch_summary.csv"
-    with summary_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(SUMMARY_CSV_FIELDS)
-        for item in summary:
-            writer.writerow(build_summary_csv_row(item))
+    with (
+        atomic_output_path(summary_csv) as temporary_csv,
+        atomic_output_path(summary_json) as temporary_json,
+    ):
+        with temporary_json.open("w", encoding="utf-8", newline="\n") as f:
+            json.dump(summary, f, indent=4, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        with temporary_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(SUMMARY_CSV_FIELDS)
+            for item in summary:
+                writer.writerow(build_summary_csv_row(item))
+            f.flush()
+            os.fsync(f.fileno())
 
     return summary_json, summary_csv

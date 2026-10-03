@@ -7,4 +7,20 @@
 # School of Mechanical Engineering, Southeast University, China
 # 东南大学机械工程学院
 
-from .datasets_path import *
+from .paths import (
+    arrow_path,
+    arrow_xyz_path,
+    icon_path,
+    icon_png_path,
+    shape_mesh_path,
+    texture_mesh_path,
+)
+
+__all__ = [
+    "arrow_path",
+    "arrow_xyz_path",
+    "icon_path",
+    "icon_png_path",
+    "shape_mesh_path",
+    "texture_mesh_path",
+]

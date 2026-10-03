@@ -1,9 +1,12 @@
-chardet
-tqdm
+# Shared geometry and preprocessing dependencies; no torch or GUI layer.
 numpy==1.25.2
 scipy==1.10.1
-trimesh[easy]
-open3d
+trimesh[easy]>=4,<5
+open3d>=0.18,<0.20
 fpsample==0.3.3
-Pillow
-scikit-image
+
+# Texture loading, contour analysis and STEP text decoding.
+Pillow>=9.5,<11
+scikit-image>=0.21,<0.25
+chardet>=4,<6
+tqdm>=4.66,<5

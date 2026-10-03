@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True)
@@ -96,6 +96,8 @@ class RefinementConfig:
     icp_relative_fitness: float = 1e-6
     icp_relative_rmse: float = 1e-6
     icp_max_iteration: int = 100
+    estimate_normals: bool = False
+    normal_max_neighbors: int = 50
 
 
 @dataclass(frozen=True)
@@ -175,3 +177,53 @@ class SymmetryAnalysisConfig:
 
 
 DEFAULT_ANALYSIS_CONFIG = SymmetryAnalysisConfig()
+
+
+@dataclass(frozen=True)
+class KasalV1Config:
+    seed: int = 0
+    primary_sample_count: int = 5251
+    secondary_sample_count: int = 360
+    fps_sample_count: int = 1500
+    fps_h: int = 3
+    axis_constraint_radius: float = 0.5
+    orbit_probe_attempts: int = 1000
+    refinement: RefinementConfig = field(
+        default_factory=lambda: RefinementConfig(estimate_normals=True)
+    )
+
+
+@dataclass(frozen=True)
+class MeshPreprocessConfig:
+    min_analysis_points: int = 100
+    target_face_count: int = 40000
+    subdivision_iterations: int = 4
+
+
+DEFAULT_KASALV1_CONFIG = KasalV1Config()
+DEFAULT_MESH_PREPROCESS_CONFIG = MeshPreprocessConfig()
+
+
+def build_analysis_config(
+    device: str,
+    fps_sample_count: int | None = None,
+    base: SymmetryAnalysisConfig = DEFAULT_ANALYSIS_CONFIG,
+) -> SymmetryAnalysisConfig:
+    """Apply explicit runtime choices to the shared algorithm defaults."""
+
+    sampling = base.sampling
+    if fps_sample_count is not None:
+        sampling = replace(sampling, fps_sample_count=int(fps_sample_count))
+    return replace(
+        base,
+        sampling=sampling,
+        axis_search=replace(base.axis_search, device=device),
+        texture=replace(base.texture, device=device),
+        classification=replace(
+            base.classification,
+            rotation_loss_device=(
+                device if base.classification.rotation_loss_device is None
+                else base.classification.rotation_loss_device
+            ),
+        ),
+    )

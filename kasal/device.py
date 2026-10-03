@@ -25,7 +25,6 @@ class TorchDeviceOption:
 
     device_id: str
     label: str
-    model_name: str
 
 
 @dataclass(frozen=True)
@@ -122,20 +121,6 @@ def torch_cuda_runtime_available() -> bool:
         return False
 
 
-def torch_is_cpu_only_build() -> bool:
-    """True when the installed wheel is a CPU-only PyTorch build."""
-
-    try:
-        import torch
-
-        cuda_build = getattr(torch.version, "cuda", None)
-        if not cuda_build:
-            return True
-        return not torch.cuda.is_available()
-    except Exception:
-        return True
-
-
 def detect_hardware_nvidia_gpus() -> List[str]:
     """NVIDIA GPU model names visible to the OS (independent of PyTorch build)."""
 
@@ -207,23 +192,6 @@ def detect_hardware_nvidia_gpus() -> List[str]:
     return names
 
 
-def gpu_install_hint_message() -> str | None:
-    """Explain why GPU cannot be selected in a CPU-only kasal environment."""
-
-    if torch_cuda_runtime_available():
-        return None
-    hardware = detect_hardware_nvidia_gpus()
-    if not hardware:
-        return None
-    joined = "; ".join(hardware)
-    return (
-        "NVIDIA GPU(s) detected on this PC (%s), but the current conda env has "
-        "CPU-only PyTorch. GPU cannot be used until you reinstall the GPU build: "
-        "%s (run inside KASAL/). See %s."
-        % (joined, GPU_INSTALL_CMD, GPU_INSTALL_DOC)
-    )
-
-
 def _gpu_model_names() -> List[str]:
     """CUDA GPU names via PyTorch; only when the runtime build supports CUDA."""
 
@@ -242,12 +210,6 @@ def _gpu_model_names() -> List[str]:
     except Exception:
         pass
     return names
-
-
-def get_cpu_model_name() -> str:
-    """Public accessor for the detected CPU marketing / model name."""
-
-    return _cpu_model_name()
 
 
 def list_hardware_device_rows(
@@ -305,31 +267,18 @@ def list_hardware_device_rows(
     return rows
 
 
-def format_hardware_device_lines() -> List[tuple[str, bool]]:
-    """Legacy flat lines derived from ``list_hardware_device_rows``."""
-
-    lines: List[tuple[str, bool]] = []
-    for row in list_hardware_device_rows():
-        text = "%s: %s" % (row.device_type, row.model_name)
-        if row.status not in ("Available", "Selected", "—"):
-            text = "%s — %s" % (text, row.status)
-        lines.append((text, row.muted))
-    return lines
-
-
 def list_torch_device_options() -> List[TorchDeviceOption]:
     """Scan this machine for CPU and CUDA GPUs with model names."""
 
     cpu_model = _cpu_model_name()
     options: List[TorchDeviceOption] = [
-        TorchDeviceOption("cpu", "CPU: %s" % cpu_model, cpu_model)
+        TorchDeviceOption("cpu", "CPU: %s" % cpu_model)
     ]
     for index, model in enumerate(_gpu_model_names()):
         options.append(
             TorchDeviceOption(
                 "cuda:%d" % index,
                 "GPU %d: %s" % (index, model),
-                model,
             )
         )
     return options
@@ -344,25 +293,41 @@ def _cuda_index_available(index: int) -> bool:
         return False
 
 
-def normalize_device_id(raw: str | None, *, default: str = "cpu") -> str:
-    """Return a valid ``cpu`` or ``cuda:N`` id for this machine."""
+def normalize_device_id(raw: str | None, *, default: str = "cpu", strict: bool = False) -> str:
+    """Return a usable device id, optionally rejecting an unavailable explicit choice."""
 
-    if not torch_cuda_runtime_available():
+    if raw is not None and not isinstance(raw, str):
+        if strict:
+            raise ValueError(f"Invalid torch device id: {raw!r}")
         return "cpu"
-
     text = (raw or "").strip().lower()
     if not text:
         text = default.strip().lower()
     if text == "cpu":
         return "cpu"
     if text == "cuda":
-        return "cuda:0" if _cuda_index_available(0) else "cpu"
-    if text.startswith("cuda:"):
+        index = 0
+    elif text.startswith("cuda:"):
         try:
             index = int(text.split(":", 1)[1])
         except (TypeError, ValueError):
+            if strict:
+                raise ValueError(f"Invalid torch device id: {raw!r}")
             return "cpu"
-        return text if _cuda_index_available(index) else "cpu"
+        if index < 0:
+            if strict:
+                raise ValueError(f"Invalid torch device id: {raw!r}")
+            return "cpu"
+    else:
+        if strict:
+            raise ValueError(f"Invalid torch device id: {raw!r}")
+        return "cpu"
+
+    canonical = f"cuda:{index}"
+    if _cuda_index_available(index):
+        return canonical
+    if strict:
+        raise ValueError(f"Requested torch device is unavailable: {canonical}")
     return "cpu"
 
 
@@ -375,15 +340,15 @@ def device_option_label(device_id: str, options: List[TorchDeviceOption] | None 
     return device_id or "CPU"
 
 
-def apply_torch_device_choice(device_id: str) -> str:
+def apply_torch_device_choice(device_id: str, *, strict: bool = True) -> str:
     """Persist GUI choice to config and ``KASAL_TORCH_DEVICE`` env (for subprocess workers)."""
 
-    canonical = normalize_device_id(device_id)
+    canonical = normalize_device_id(device_id, strict=strict)
     try:
-        import kasal.config.config as config
+        import kasal.config.runtime as config
 
         config.torch_device_id = canonical
-    except Exception:
+    except ImportError:
         pass
     os.environ["KASAL_TORCH_DEVICE"] = canonical
     return canonical
@@ -394,20 +359,16 @@ def resolve_torch_device(prefer: str = "cuda") -> str:
 
     env = os.environ.get("KASAL_TORCH_DEVICE", "").strip()
     if env:
-        return normalize_device_id(env, default=prefer)
+        return normalize_device_id(env, default=prefer, strict=True)
 
     try:
-        import kasal.config.config as config
+        import kasal.config.runtime as config
 
         gui = getattr(config, "torch_device_id", "") or ""
         if gui:
-            return normalize_device_id(gui, default=prefer)
-    except Exception:
+            return normalize_device_id(gui, default=prefer, strict=True)
+    except ImportError:
         pass
 
     prefer_norm = normalize_device_id(prefer, default="cpu")
-    if prefer_norm != "cpu":
-        return prefer_norm
-    if _cuda_index_available(0):
-        return "cuda:0"
-    return "cpu"
+    return prefer_norm

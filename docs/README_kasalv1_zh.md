@@ -1,176 +1,152 @@
 <div align="center">
 
-[English](./README_kasalv1.md) | **中文**
+[English](README_kasalv1.md) | **中文** · [KASALv2 主页](../README_zh.md)
 
 </div>
 
 # KASAL（kasalv1）用户手册
 
-本文介绍 **经典 kasalv1** 交互流程（用户指定对称类型、PyMeshLab 预处理）。集成 GUI 在 **KASALv2** 之外仍完整保留这些功能。
+本文介绍原版用户引导 KASAL 流程：用户提供对称类型和阶数，kasalv1 据此定位对应的对称轴与旋转中心。当前仓库在自动 KASALv2 引擎之外继续保留该流程。
 
-**KASALv2（新功能）** → [Main README](../README.md) | [主 README（中文）](../README_zh.md)
+自动分析、当前 GUI 行为和命令行批处理见[项目 README](../README_zh.md#使用要点)。
 
----
+## 发布方式
 
-# <img src="../kasal/datasets/K8.ico" width="36"> KASAL（kasalv1）：基于主轴的对称轴定位
+| 发布物 | 内容 | 许可 |
+|--------|------|------|
+| 当前源码仓库 | 集成 kasalv1 + KASALv2 应用 | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| [PyPI 上的 `kasal-6d`](https://pypi.org/project/kasal-6d/) | 经典 kasalv1 包 | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
-KASAL 用于确定旋转对称物体的对称轴朝向与旋转中心。使用 KASAL 时，用户需指定八种预定义旋转对称类型之一；据此在物体模型上定位全部对称轴。完成后自动以 [BOP 格式](https://bop.felk.cvut.cz/) 保存旋转对称信息，便于与支持 BOP 的 6D 位姿估计方法集成，也可用于三维重建、物体识别等任务。
+安装经典包：
 
-> **↩ 返回 KASALv2** — 您从 KASALv2 文档跳转至此。
-> **回到：** [KASALv2 导航表](../README_zh.md#zh-ret-nav-full) · [kasalv1 与 kasalv2 对比](../README_zh.md#zh-ret-compare-kasalv1)
-
-<a name="news"></a>
-
-### <img src="../kasal/datasets/K16.png" width="28"> 动态
-
-统一时间轴见 [主 README — 项目时间轴](../README_zh.md#timeline)。
-
-- **2025 年 9 月**：官方支持 **Windows** 与 **Ubuntu (Linux)**。
-- **2025 年 3 月**：GitHub 与 PyPI 全面开源。
-- **2024 年 12 月**：TIP 2024 论文 — [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801)。
-
-<a name="datasets"></a>
-
-### <img src="../kasal/datasets/K17.png" width="28"> 数据集
-
-> **↩ 返回 KASALv2**
-> **回到：** [数据集（v2 概览）](../README_zh.md#zh-ret-nav-datasets)
-
-可通过 DSRSTO 数据集识别哪些物体具有旋转对称性。我们亦使用 KASAL 标注 Google Scanned Objects (GSO) 与 ShapeNet 数据集中的物体。
-
-* DSRSTO: https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset
-* GSO: https://huggingface.co/datasets/SEU-WYL/GSO-SAD
-* ShapeNet: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
-
-<a name="installation"></a>
-
-### <img src="../kasal/datasets/K9.png" width="28"> 安装
-
-> **↩ 返回 KASALv2**
-> **回到：** [快速开始（v2）](../README_zh.md#zh-ret-nav-install) · [KASALv2 导航表](../README_zh.md#zh-ret-nav-full)
-
-* **平台**：支持 **Windows** 与 **Ubuntu (Linux)**
-
->| 平台 | 测试版本 |
->|------|----------|
->| Windows | Windows 10 |
->| Ubuntu | 20.04+（glibc ≥ 2.31）|
-
-* **依赖**：Anaconda 3、MeshLab
-
-* **PyPI 安装（kasalv1 包）**
-
-```
+```bash
 pip install kasal-6d
 ```
 
-（当前 PyPI 仍为 **kasalv1** 构建；集成 **KASALv2** 目前仅提供源码安装，尚未上架 PyPI。）
+如需运行集成源码应用，请按[源码安装指南](install_zh.md)操作。
 
-**许可：** 本 **KASALv2** 仓库适用 **[PolyForm Noncommercial 1.0.0](../LICENSE)**；独立 **kasalv1** PyPI 包（`pip install kasal-6d`）适用 **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**。
+## 启动集成 GUI
 
-* **KASALv2 源码安装**：见 [install_kasalv2_zh.md](install_kasalv2_zh.md)。技术细节：[install.md](install.md)。摘要：[主 README 快速开始](../README_zh.md#quick-start)。
-
-* **快速体验（经典 GUI）**
-
-```
-python demo_texture_meshes.py
-# 或
+```bash
 python demo_shape_meshes.py
 ```
 
-<a name="rotational-symmetry-types"></a>
+纹理示例：
 
-### <img src="../kasal/datasets/K10.png" width="28"> 旋转对称类型
-
-> **↩ 返回 KASALv2**
-> **回到：** [对称类型 — v2 导航](../README_zh.md#zh-ret-nav-symmetry-types) · [对称类型 — v2 功能说明](../README_zh.md#zh-ret-detail-sym-types)
-
-KASAL 支持八类旋转对称（三类连续、五类离散）。
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/fig1.png" alt="">
-</div>
-
-在 **「Symmetry Type / 对称类型」** 下拉中选择类型，点击 **「Cal Current Obj / 计算当前物体」** 即可定位对称轴。对 **n 折棱柱** 与 **n 折棱锥** 类型，须指定阶数 *n*。
-
-<a name="symmetry-axis-localization-results"></a>
-
-### <img src="../kasal/datasets/K11.png" width="28"> 对称轴定位结果
-
-> **↩ 返回 KASALv2**
-> **回到：** [可视化 — v2 导航](../README_zh.md#zh-ret-nav-visualization)
-
-以**正十二面体**为例，给定对称类型后，KASAL 可准确求出全部对称轴朝向与旋转中心，并以箭头与顶点着色等方式可视化方向、阶数与旋转中心。
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/result-p20-1.png" alt="">
-</div>
-
-箭头起点在旋转中心，方向沿对称轴；阶数可视化通过对顶点施加满足对称性的变换矩阵并重新着色实现。
-
-<div style="text-align: center;">
-  <img src="../kasal/datasets/result-p20-2.png" alt="">
-</div>
-
-<a name="batch-processing"></a>
-
-### <img src="../kasal/datasets/K12.png" width="28"> 批量处理
-
-> **↩ 返回 KASALv2**
-> **回到：** [批量处理 — v2 导航](../README_zh.md#zh-ret-nav-batch) · [Cal All（仅未保存）— v2 功能说明](../README_zh.md#zh-ret-detail-cal-all)
-
-> **说明（集成版 GUI）**：**KASALv2** 桌面应用中 **「批量计算」** 仅处理 **未保存（unsaved）** 物体。下文描述 **经典 kasalv1** 批量流程。
-
-给定目录后，KASAL 加载其中全部模型；用户须为每件指定对称类型、阶数（如适用）及是否纹理旋转对称。完成后点击 **「Cal All Objs / 批量计算」** 批量定位。
-
-切换物体时会自动保存；**目录中最后一件**须切回前一件以确保落盘。仅有一件物体时，**计算当前** 或 **批量计算** 即可完成并保存。
-
-KASALv2 **Cal All（仅未保存）** 语义见 [主 README](../README_zh.md#zh-ret-detail-cal-all)。
-
+```bash
+python demo_texture_meshes.py
 ```
+
+也可以打开自己的数据集：
+
+```python
 from kasal.app.polyscope_app import app
 
-mesh_path = '您的三维模型数据集目录'
-
-app(mesh_path)
+app(r"C:\path\to\mesh_dataset")
 ```
 
-<a name="texture-rotational-symmetry"></a>
+集成 GUI 会递归发现 PLY 和 OBJ。KASALv2 显式传入时支持的其他格式见[使用方式概览](../README_zh.md#选择使用方式)。
 
-### <img src="../kasal/datasets/K13.png" width="28"> 纹理旋转对称
+<a id="rotational-symmetry-types"></a>
 
-> **↩ 返回 KASALv2**
-> **回到：** [纹理 ADI-C — v2 导航](../README_zh.md#zh-ret-nav-texture) · [纹理 / ADI-C — v2 功能说明](../README_zh.md#zh-ret-detail-texture)
+## 旋转对称类型
 
-多数物体为几何旋转对称；少数为纹理旋转对称。默认按几何模式定位；纹理对称须手动开启 **「ADI-C」**。
+KASAL 使用八个 canonical 类型：三类连续对称和五类离散对称。
 
-<a name="assisted-localization"></a>
+<p align="center">
+  <img src="../kasal/datasets/fig1.png" alt="KASAL 支持的八类旋转对称" width="720">
+</p>
 
-### <img src="../kasal/datasets/K14.png" width="28"> 辅助定位
+| 标签 | 用户输入 |
+|------|----------|
+| `C(>>1): Spherical Item` | 类型 |
+| `C(>1): Cylindrical Item` | 类型 |
+| `C(=1): Circular Item` | 类型 |
+| `D(>1): n-fold Prismatic Item` | 类型与阶数 *n* |
+| `D(=1): n-fold Pyramidal Item` | 类型与阶数 *n* |
+| `P(4): Tetrahedral Item` | 类型 |
+| `P(8): Octahedral Item` | 类型 |
+| `P(20): Icosahedral Item` | 类型 |
 
-> **↩ 返回 KASALv2**
-> **回到：** [show xyz — v2 导航](../README_zh.md#zh-ret-nav-assisted) · [轴 xyz（kasalv1）— v2 功能说明](../README_zh.md#zh-ret-detail-assisted)
+在主面板中：
 
-对近似对称或不完美物体，可开启 **「show xyz」**，手动选择最接近 **主轴（最高阶对称轴）** 的 x / y / z 轴。
+1. 选择具体的**对称类型**。
+2. 对 n 折棱柱或棱锥设置 *n*。
+3. 将当前对象引擎选为 **kasalv1**。
+4. 点击**当前计算**。
 
-<div style="text-align: center;">
-  <img src="../kasal/datasets/show xyz.png" alt="">
-</div>
+如果对象尚未标注，集成应用即使收到 kasalv1 请求也会路由到 KASALv2，避免在缺少必要类型时运行手动流程。
 
-<a name="citation"></a>
+<a id="symmetry-axis-localization-results"></a>
 
-### <img src="../kasal/datasets/K15.png" width="28"> 引用
+## 对称轴定位结果
 
-使用 **kasalv1** 请引用 TIP 2024；使用 **KASALv2** 请优先引用 CVPR 2026 — 见 [主 README — 引用](../README_zh.md#citation)。
+KASAL 会估计给定对称族蕴含的全部轴以及共享旋转中心。可视化用箭头表示轴方向，并用顶点颜色区分对称阶数。
+
+<p align="center">
+  <img src="../kasal/datasets/result-p20-1.png" alt="正十二面体上的对称轴与旋转中心" width="720">
+</p>
+
+箭头从旋转中心出发，并沿对称轴方向指向。
+
+<p align="center">
+  <img src="../kasal/datasets/result-p20-2.png" alt="旋转阶数的顶点着色可视化" width="720">
+</p>
+
+结果保存为 `*_sym_type.json`，并可按请求写出 `*_sym.ply`。
+
+<a id="texture-rotational-symmetry"></a>
+
+## 纹理旋转对称
+
+物体几何的旋转阶数可能高于其外观。需要让纹理或颜色参与对称判断时启用 **ADI-C**；自带示例使用 `demo_texture_meshes.py`。
+
+集成 KASALv2 路径把纹理感知结果单独存入 `texture_symmetry`，不会覆盖几何结果。
+
+<a id="assisted-localization"></a>
+
+## 辅助定位
+
+近似对称或不完美网格可能使主轴不明确。可启用 **show xyz** 显示规范坐标轴，再选择最接近预期主关键轴的 X、Y 或 Z 轴。
+
+<p align="center">
+  <img src="../kasal/datasets/show xyz.png" alt="辅助定位使用的 XYZ 坐标轴" width="720">
+</p>
+
+选择坐标轴覆盖后，计算总是路由到 kasalv1；同时仍须提供具体对称类型。
+
+<a id="batch-processing"></a>
+
+## 批量处理
+
+集成应用中的**批量计算（仅未保存）**只处理没有有效 sidecar 的对象，或加载后被编辑的对象。每个对象成功后立即保存结果。
+
+如需可复现的非交互执行，可使用 `python -m kasal.cli.run_job JOB.json`。它通过 `defaults.sym_type`、`defaults.n_fold` 与 `defaults.axis_xyz` 接收相同的手动字段。
+
+独立发布的 PyPI 包保留其[项目页面](https://pypi.org/project/kasal-6d/)所述的经典 kasalv1 应用；其界面可能与当前集成源码应用不同。
+
+<a id="datasets"></a>
+
+## 数据集
+
+- [DSRSTO](https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset)
+- [GSO-SAD](https://huggingface.co/datasets/SEU-WYL/GSO-SAD)
+- [ShapeNet-SAD](https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD)
+
+<a id="citation"></a>
+
+## 引用
 
 ```bibtex
 @ARTICLE{KASAL,
-  author = {Wang, Yulin and Luo, Chen},
-  title  = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture},
-  journal= {IEEE Transactions on Image Processing},
-  year   = {2024},
-  volume = {33},
-  pages  = {6720-6733},
-  doi    = {10.1109/TIP.2024.3515801}
+  author  = {Wang, Yulin and Luo, Chen},
+  title   = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture},
+  journal = {IEEE Transactions on Image Processing},
+  year    = {2024},
+  volume  = {33},
+  pages   = {6720--6733},
+  doi     = {10.1109/TIP.2024.3515801}
 }
 ```
+
+如果使用自动 KASALv2 方法，还请引用[项目 README](../README_zh.md#引用)中的 CVPR 2026 论文。
