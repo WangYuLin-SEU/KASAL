@@ -1,228 +1,259 @@
-# Author: Yulin Wang (yulinwang@seu.edu.cn)
+# KASAL project & GitHub: Yulin Wang (王宇林, yulinwang@seu.edu.cn)
+# KASAL 项目与 GitHub：王宇林 Yulin Wang (yulinwang@seu.edu.cn)
+# KASALv2 algorithm: Mengxin Zhang (张梦欣, mx.zhang@seu.edu.cn)
+# KASALv2 算法主要设计：张梦欣 Mengxin Zhang (mx.zhang@seu.edu.cn)
+# Maintenance & pip packaging: Hu Mengting (胡梦婷, 220240361@seu.edu.cn)
+# 维护与 pip 打包：胡梦婷 Hu Mengting (220240361@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
+# 东南大学机械工程学院
 
-import fpsample, trimesh
+"""KASALv1 localization of user-selected symmetry templates."""
+
+import fpsample
 import numpy as np
+import trimesh
 from scipy import spatial
-from kasal.symmetry_lab.symmetry_axis_template import clear_sym
-from kasal.utils.load_stp import stp2info, axis_num
-from kasal.geometry.o3d_icp import refine_center_direction
-from kasal.keyaxis.keyaxis import cal_KA1, cal_KA2
-from kasal.keyaxis.rotate import rotate_translate
 
-def cal_model_sym(model_i_, step_path = None, sym_op = None, sym_aware = False, op = 'pts', sample_num = 10001, fpsample_num = 1500, icp_op = True, xyz_op = None):
-    """ Compute the rotational symmetry of an object.  
-    Parameters:  
-        model_i_: Object model information, including vertex coordinates, colors, normals, face indices, etc.  
-        step_path: You can design object models using software like AutoCAD or SolidWorks and export them as STP files.  
-                This function analyzes the rotational symmetry type based on the STP file and locates the symmetry axis  
-                within the object model.  
-                Note: The STP file must not contain any curved surfaces, only polygonal planes.  
-                Additionally, the object model in the STP file must be strictly closed.  
-        sym_op: Type of rotational symmetry.  
-        op: If set to 'pts', the object has geometric rotational symmetry;  
-            if set to 'colors', the object has texture rotational symmetry.  
-        sample_num: Number of Fibonacci sphere sampling points.  
-        fpsample_num: Number of FPS algorithm sampling points.  
-        icp_op: Whether to enable ICP to refine the key axis direction and rotation center.  
-        xyz_op: Sets the key axis to be close to the x, y, or z axis,  
-                used only for objects where the symmetry axis cannot be correctly located.  
+from kasal.symmetry_lab.symmetry_axis_template import clear_symmetry_fields
+from kasal.config.algorithms import DEFAULT_KASALV1_CONFIG, KasalV1Config
+from kasal.geometry.o3d_icp import refine_axis_center
+from kasal.keyaxis.search import search_primary_key_axis, search_secondary_key_axis
+from kasal.geometry.transforms import rotation_about_axis
+from kasal.viz.symmetry_visual_export import apply_symmetry_orbit_colors
 
-    Returns:  
-        model_i_: Updated object model information, including the direction of the rotational symmetry axis and rotation center.  
-    """
-    
-    axis_list = []
-    if isinstance(step_path, str):
-        if step_path is not None:
-            face_line_point_list = stp2info(step_path)
-            norm_axis_f_all, num_f_all = axis_num(face_line_point_list)
-            for (a_, n_) in zip(norm_axis_f_all, num_f_all):
-                axis_list.append({'axis_l' : [a_.tolist()], 'num' : int(n_)})
-    elif isinstance(step_path, list):
-        axis_list = step_path
-    elif step_path is None:
-        step_path
-    else:
-        raise ValueError('The type of "step_path" is unsupported ! ')
-    np.random.seed(0)
-    kdline_fps_samples_idx = fpsample.bucket_fps_kdline_sampling(model_i_['vertices'], min([fpsample_num, model_i_['vertices'].shape[0]]), h=3)
-    ply_pts = model_i_['vertices'][kdline_fps_samples_idx,:]
-    colors_ = model_i_['colors'][kdline_fps_samples_idx,:]
-    diameter = model_i_['diameter']
-    clear_sym(model_i_)
-    if sym_op == 'symmetries_continuous' or sym_op == 'symmetries_continuous_2' or sym_op == 'symmetries_continuous_3':
-        mesh_mass = trimesh.Trimesh(vertices=model_i_['vertices'].astype(np.float32), faces=model_i_['faces'].astype(np.uint32))
-        mesh_mass_c = mesh_mass.convex_hull
-        center_ch = mesh_mass_c.mass_properties['center_mass']
-        print('center_ch: ', center_ch)
-        axis_1_info = cal_KA1(ply_pts, colors_, diameter, div=3, sample_num = sample_num, center_ch=center_ch, op=op, xyz_op=xyz_op)
-        loc_sym_axis_1 = axis_1_info['axis']
-        if icp_op:
-            center_ch, loc_sym_axis_1 = refine_center_direction(axis_1_info, model_i_, center_ch)
-        if sym_op == 'symmetries_continuous_2' or sym_op == 'symmetries_continuous_3':
-            axis_2_info = cal_KA2(90, ply_pts, colors_, loc_sym_axis_1, diameter, div=2, sample_num = 360, center_ch=center_ch, op=op)
-            loc_sym_axis_2 = axis_2_info['axis']
-            if icp_op:
-                center_ch, loc_sym_axis_2 = refine_center_direction(axis_2_info, model_i_, center_ch)
-        rot_model_ = False
-        if rot_model_:
-            target_vec_ = np.array([0, 0, 1]) 
-            axis_1 = target_vec_
-            axis_2 = np.array(loc_sym_axis_1)
-            axis_3 = np.cross(axis_1, axis_2)
-            if np.linalg.norm(axis_3) == 0:
-                rot_ = np.eye(3)
-            else:
-                axis_3 /= np.linalg.norm(axis_3)
-                axis_10 = np.cross(axis_1, axis_3)
-                axis_20 = np.cross(axis_2, axis_3)
-                axis_10 /= np.linalg.norm(axis_10)
-                axis_20 /= np.linalg.norm(axis_20)
-                points_original = np.array([axis_1, axis_3, axis_10])
-                points_translated = np.array([axis_2, axis_3, axis_20])
-            rot_ = np.dot(points_original.T, np.linalg.inv(points_translated.T))
-            model_i_['vertices'][:, 0] -= center_ch[0]
-            model_i_['vertices'][:, 1] -= center_ch[1]
-            model_i_['vertices'][:, 2] -= center_ch[2]
-            model_i_['vertices'] = np.dot(rot_, model_i_['vertices'].T).T
-            model_i_["min_x"] = np.min(model_i_['vertices'][:, 0])
-            model_i_["min_y"] = np.min(model_i_['vertices'][:, 1])
-            model_i_["min_z"] = np.min(model_i_['vertices'][:, 2])
-            model_i_["size_x"] = np.max(model_i_['vertices'][:, 0]) - np.min(model_i_['vertices'][:, 0])
-            model_i_["size_y"] = np.max(model_i_['vertices'][:, 1]) - np.min(model_i_['vertices'][:, 1])
-            model_i_["size_z"] = np.max(model_i_['vertices'][:, 2]) - np.min(model_i_['vertices'][:, 2])
-            if sym_op == 'symmetries_continuous_2':
-                model_i_['symmetries_continuous'] = [{"axis": target_vec_.reshape((3)).tolist(), "offset": [0, 0, 0]}]
-                model_i_['symmetries_discrete'] = [[1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1]]
-            else:
-                model_i_['symmetries_continuous'] = [{"axis": target_vec_.reshape((3)).tolist(), "offset": [0, 0, 0]}]
-        else:
-            model_i_["min_x"] = np.min(model_i_['vertices'][:, 0])
-            model_i_["min_y"] = np.min(model_i_['vertices'][:, 1])
-            model_i_["min_z"] = np.min(model_i_['vertices'][:, 2])
-            model_i_["size_x"] = np.max(model_i_['vertices'][:, 0]) - np.min(model_i_['vertices'][:, 0])
-            model_i_["size_y"] = np.max(model_i_['vertices'][:, 1]) - np.min(model_i_['vertices'][:, 1])
-            model_i_["size_z"] = np.max(model_i_['vertices'][:, 2]) - np.min(model_i_['vertices'][:, 2])
-            if sym_op == 'symmetries_continuous_2':
-                axis_2 = loc_sym_axis_2
-                r_m = rotate_translate(axis_2, 180, center_ch)
-                model_i_['symmetries_continuous'] = [{"axis": loc_sym_axis_1.reshape((3)).tolist(), "offset": center_ch.reshape((3)).tolist()}]
-                model_i_['symmetries_discrete'] = [r_m.reshape((16)).tolist()]
-            elif sym_op == 'symmetries_continuous':
-                model_i_['symmetries_continuous'] = [{"axis": loc_sym_axis_1.reshape((3)).tolist(), "offset": center_ch.reshape((3)).tolist()}]
-            elif sym_op == 'symmetries_continuous_3':
-                model_i_['symmetries_continuous'] = [{"axis" : [], "offset": center_ch.reshape((3)).tolist()}]
-                
-    elif sym_op == 'symmetries_discrete':
-        mesh_mass = trimesh.Trimesh(vertices=model_i_['vertices'].astype(np.float32), faces=model_i_['faces'].astype(np.uint32))
-        mesh_mass_c = mesh_mass.convex_hull
-        center_ch = mesh_mass_c.mass_properties['center_mass']
-        print('center_ch: ', center_ch)
-        num_list = []
-        for axis_i in axis_list:
-            num_list.append(axis_i['num'])
-        num_arg_sort = np.argsort( - np.array(num_list))
-        axis_info_in_obj_pt_model = {}
-        if len(num_list) == 1:
-            idx_sym_axis_1 = num_arg_sort[0] 
-            div_1 = axis_list[idx_sym_axis_1]['num'] 
-            axis_1_info = cal_KA1(ply_pts, colors_, diameter, div=div_1+1, sample_num = sample_num, center_ch=center_ch, op=op, xyz_op=xyz_op)
-            loc_sym_axis_1 = axis_1_info['axis']
-            if icp_op:
-                center_ch, loc_sym_axis_1 = refine_center_direction(axis_1_info, model_i_, center_ch)
-            axis_info_in_obj_pt_model['axis'] = [loc_sym_axis_1]
-            model_i_['axis'] = axis_info_in_obj_pt_model['axis']
-            model_i_['center_ch'] = center_ch
-            axis_info_in_obj_pt_model['axis_mat'] = []
-            for div_i in range(div_1):
-                r_m = rotate_translate(loc_sym_axis_1, (div_i+1) * 360 / (div_1+1), center_ch)
-                axis_info_in_obj_pt_model['axis_mat'].append(r_m)
-            axis_info_in_obj_pt_model['details_sym_axis_1'] = axis_1_info
-        
-        if len(num_list) >= 2:
-            idx_sym_axis_1 = num_arg_sort[0] 
-            div_1 = axis_list[idx_sym_axis_1]['num'] 
-            axis_1_info = cal_KA1(ply_pts, colors_, diameter, div=div_1+1, sample_num = sample_num, center_ch=center_ch, op=op)
-            loc_sym_axis_1 = axis_1_info['axis']
-            if icp_op:
-                center_ch, loc_sym_axis_1 = refine_center_direction(axis_1_info, model_i_, center_ch)
-            idx_sym_axis_2 = num_arg_sort[1] 
-            div_2 = axis_list[idx_sym_axis_2]['num'] 
-            axis_1 = axis_list[idx_sym_axis_1]['axis_l'][0]
-            axis_1 = np.array(axis_1) / np.linalg.norm(axis_1)
-            axis_2 = axis_list[idx_sym_axis_2]['axis_l'][0]
-            axis_2 = np.array(axis_2) / np.linalg.norm(axis_2)
-            dot_product = np.dot(axis_1, axis_2)
-            angle_b12 = np.arccos(dot_product)
-            angle_degrees = np.degrees(angle_b12)
-            ang_b12 = angle_degrees
-            axis_2_info = cal_KA2(ang_b12, ply_pts, colors_, loc_sym_axis_1, diameter, div=div_2+1, sample_num = 360, center_ch=center_ch, op=op)
-            loc_sym_axis_2 = axis_2_info['axis']
-            if icp_op:
-                center_ch, loc_sym_axis_2 = refine_center_direction(axis_2_info, model_i_, center_ch)
-            
-            points_original = np.array([axis_1, axis_2, np.cross(axis_1, axis_2)/np.linalg.norm(np.cross(axis_1, axis_2))])
-            points_translated = np.array([loc_sym_axis_1, loc_sym_axis_2, np.cross(loc_sym_axis_1, loc_sym_axis_2)/np.linalg.norm(np.cross(loc_sym_axis_1, loc_sym_axis_2))])
-            rotation = np.dot(points_translated.T, np.linalg.inv(points_original.T))
-            axis_mat = []
-            axises = []
-            for axis_i in axis_list:
-                for axis_ii in axis_i['axis_l']:
-                    div_ = axis_i['num']+1
-                    dis_ang = 360 / div_
-                    for div_i in range(div_ - 1):
-                        c_ang = (div_i+1) * dis_ang
-                        r_m = rotate_translate(np.dot(rotation, np.array(axis_ii)), c_ang, center_ch)
-                        axis_mat.append(r_m)
-                    axises.append(np.dot(rotation, np.array(axis_ii)))
-            axis_info_in_obj_pt_model['axis'] = axises
-            model_i_['axis'] = axis_info_in_obj_pt_model['axis']
-            model_i_['center_ch'] = center_ch
-            axis_info_in_obj_pt_model['axis_mat'] = axis_mat
-            axis_info_in_obj_pt_model['details_sym_axis_1'] = axis_1_info
-            axis_info_in_obj_pt_model['details_sym_axis_2'] = axis_2_info
+
+def _apply_model_bounds(model: dict) -> None:
+
+    vertices = model["vertices"]
+    model["min_x"] = np.min(vertices[:, 0])
+    model["min_y"] = np.min(vertices[:, 1])
+    model["min_z"] = np.min(vertices[:, 2])
+    model["size_x"] = np.max(vertices[:, 0]) - np.min(vertices[:, 0])
+    model["size_y"] = np.max(vertices[:, 1]) - np.min(vertices[:, 1])
+    model["size_z"] = np.max(vertices[:, 2]) - np.min(vertices[:, 2])
+
+def _transform_axis_template(axis_template, rotation, center):
+    """Expand template axes and rotations in the localized frame."""
+
+    rotation_transforms = []
+    localized_axis_vectors = []
+    for template_entry in axis_template:
+        for template_axis in template_entry['axis_l']:
+            axis_order = template_entry['num']+1
+            rotation_step_deg = 360 / axis_order
+            for rotation_index in range(axis_order - 1):
+                rotation_angle_deg = (rotation_index+1) * rotation_step_deg
+                rotation_transform = rotation_about_axis(np.dot(rotation, np.array(template_axis)), rotation_angle_deg, center)
+                rotation_transforms.append(rotation_transform)
+            localized_axis_vectors.append(np.dot(rotation, np.array(template_axis)))
+    return localized_axis_vectors, rotation_transforms
+
+
+def localize_symmetry_axes(
+    model,
+    template_or_step_path=None,
+    symmetry_operation=None,
+    color_symmetry_orbits=False,
+    score_mode='pts',
+    config: KasalV1Config = DEFAULT_KASALV1_CONFIG,
+    refine_with_icp=True,
+    axis_constraint=None,
+):
+    """Locate a specified symmetry template and update the mesh model in place.
+
+    The template may also come from a closed, planar-face STEP model.
+    Orbit coloring affects visualization only; score_mode selects the metric."""
+
+    axis_template = []
+    if isinstance(template_or_step_path, str):
+        from kasal.utils.io_step import load_step_faces, infer_step_symmetry_axes
+
+        step_faces = load_step_faces(template_or_step_path)
+        step_axes, step_rotation_counts = infer_step_symmetry_axes(step_faces)
+        for (step_axis, rotation_count) in zip(step_axes, step_rotation_counts):
+            axis_template.append({'axis_l' : [step_axis.tolist()], 'num' : int(rotation_count)})
+    elif isinstance(template_or_step_path, list):
+        axis_template = template_or_step_path
+    elif template_or_step_path is not None:
+        raise ValueError('Expected an axis-template list, a STEP path, or None.')
+    np.random.seed(config.seed)
+    sample_indices = fpsample.bucket_fps_kdline_sampling(
+        model["vertices"],
+        min(config.fps_sample_count, model["vertices"].shape[0]),
+        h=config.fps_h,
+    )
+    sampled_points = model['vertices'][sample_indices,:]
+    sampled_colors = model['colors'][sample_indices,:]
+    diameter = model['diameter']
+    clear_symmetry_fields(model)
+    if symmetry_operation in (
+        "symmetries_continuous", "symmetries_continuous_2",
+        "symmetries_continuous_3", "symmetries_discrete",
+    ):
+        mesh_mass = trimesh.Trimesh(
+            vertices=model["vertices"].astype(np.float32),
+            faces=model["faces"].astype(np.uint32),
+        )
+        center = mesh_mass.convex_hull.mass_properties["center_mass"]
+        print("center_ch: ", center)
+    if symmetry_operation == 'symmetries_continuous' or symmetry_operation == 'symmetries_continuous_2' or symmetry_operation == 'symmetries_continuous_3':
+        primary_axis_info = search_primary_key_axis(
+            sampled_points,
+            sampled_colors,
+            diameter,
+            order=3,
+            sample_count=config.primary_sample_count,
+            center=center,
+            score_mode=score_mode,
+            axis_constraint=axis_constraint,
+            axis_constraint_radius=config.axis_constraint_radius,
+        )
+        primary_axis = primary_axis_info['axis']
+        if refine_with_icp:
+            center, primary_axis = refine_axis_center(
+                primary_axis_info,
+                model["vertices"],
+                diameter,
+                center,
+                config=config.refinement,
+            )
+        if symmetry_operation == 'symmetries_continuous_2' or symmetry_operation == 'symmetries_continuous_3':
+            secondary_axis_info = search_secondary_key_axis(
+                90,
+                sampled_points,
+                sampled_colors,
+                primary_axis,
+                diameter,
+                order=2,
+                sample_count=config.secondary_sample_count,
+                center=center,
+                score_mode=score_mode,
+            )
+            secondary_axis = secondary_axis_info['axis']
+            if refine_with_icp:
+                center, secondary_axis = refine_axis_center(
+                    secondary_axis_info,
+                    model["vertices"],
+                    diameter,
+                    center,
+                    config=config.refinement,
+                )
+        _apply_model_bounds(model)
+        if symmetry_operation == 'symmetries_continuous_2':
+            rotation_transform = rotation_about_axis(secondary_axis, 180, center)
+            model['symmetries_continuous'] = [{"axis": primary_axis.reshape((3)).tolist(), "offset": center.reshape((3)).tolist()}]
+            model['symmetries_discrete'] = [rotation_transform.reshape((16)).tolist()]
+        elif symmetry_operation == 'symmetries_continuous':
+            model['symmetries_continuous'] = [{"axis": primary_axis.reshape((3)).tolist(), "offset": center.reshape((3)).tolist()}]
+        elif symmetry_operation == 'symmetries_continuous_3':
+            model['symmetries_continuous'] = [{"axis" : [], "offset": center.reshape((3)).tolist()}]
+
+    elif symmetry_operation == 'symmetries_discrete':
+        rotation_counts = []
+        for template_entry in axis_template:
+            rotation_counts.append(template_entry['num'])
+        axis_order_indices = np.argsort( - np.array(rotation_counts))
+        localized_axes = {}
+        if rotation_counts:
+            primary_template_index = axis_order_indices[0]
+            primary_rotation_count = axis_template[primary_template_index]['num']
+            primary_axis_info = search_primary_key_axis(
+                sampled_points, sampled_colors, diameter,
+                order=primary_rotation_count+1,
+                sample_count=config.primary_sample_count,
+                center=center,
+                score_mode=score_mode,
+                axis_constraint=axis_constraint if len(rotation_counts) == 1 else None,
+                axis_constraint_radius=config.axis_constraint_radius,
+            )
+            primary_axis = primary_axis_info['axis']
+            if refine_with_icp:
+                center, primary_axis = refine_axis_center(
+                    primary_axis_info, model["vertices"], diameter, center,
+                    config=config.refinement,
+                )
+        if len(rotation_counts) == 1:
+            localized_axes['axis'] = [primary_axis]
+            model['axis'] = localized_axes['axis']
+            model['center_ch'] = center
+            localized_axes['axis_mat'] = []
+            for rotation_index in range(primary_rotation_count):
+                rotation_transform = rotation_about_axis(primary_axis, (rotation_index+1) * 360 / (primary_rotation_count+1), center)
+                localized_axes['axis_mat'].append(rotation_transform)
+
+        if len(rotation_counts) >= 2:
+            secondary_template_index = axis_order_indices[1]
+            secondary_rotation_count = axis_template[secondary_template_index]['num']
+            primary_template_axis = axis_template[primary_template_index]['axis_l'][0]
+            primary_template_axis = np.array(primary_template_axis) / np.linalg.norm(primary_template_axis)
+            secondary_template_axis = axis_template[secondary_template_index]['axis_l'][0]
+            secondary_template_axis = np.array(secondary_template_axis) / np.linalg.norm(secondary_template_axis)
+            axis_dot_product = np.dot(primary_template_axis, secondary_template_axis)
+            template_angle_rad = np.arccos(axis_dot_product)
+            template_angle_deg = np.degrees(template_angle_rad)
+            inter_axis_angle_deg = template_angle_deg
+            secondary_axis_info = search_secondary_key_axis(
+                inter_axis_angle_deg,
+                sampled_points,
+                sampled_colors,
+                primary_axis,
+                diameter,
+                order=secondary_rotation_count+1,
+                sample_count=config.secondary_sample_count,
+                center=center,
+                score_mode=score_mode,
+            )
+            secondary_axis = secondary_axis_info['axis']
+            if refine_with_icp:
+                center, secondary_axis = refine_axis_center(
+                    secondary_axis_info,
+                    model["vertices"],
+                    diameter,
+                    center,
+                    config=config.refinement,
+                )
+
+            template_basis = np.array([primary_template_axis, secondary_template_axis, np.cross(primary_template_axis, secondary_template_axis)/np.linalg.norm(np.cross(primary_template_axis, secondary_template_axis))])
+            localized_basis = np.array([primary_axis, secondary_axis, np.cross(primary_axis, secondary_axis)/np.linalg.norm(np.cross(primary_axis, secondary_axis))])
+            rotation = np.dot(localized_basis.T, np.linalg.inv(template_basis.T))
+            localized_axis_vectors, rotation_transforms = _transform_axis_template(
+                axis_template, rotation, center,
+            )
+            localized_axes['axis'] = localized_axis_vectors
+            model['axis'] = localized_axes['axis']
+            model['center_ch'] = center
+            localized_axes['axis_mat'] = rotation_transforms
         symmetries_discrete = []
-        sym_draw_list = []
-        sym_draw_list.append(np.eye(4))
-        for mat_1 in axis_info_in_obj_pt_model['axis_mat']:
-            symmetries_discrete.append(mat_1.reshape((16)))
-            sym_draw_list.append(mat_1)
+        orbit_transforms = []
+        orbit_transforms.append(np.eye(4))
+        for transform in localized_axes['axis_mat']:
+            symmetries_discrete.append(transform.reshape((16)))
+            orbit_transforms.append(transform)
         symmetries_discrete = np.array(symmetries_discrete)
-        status_aware = 0
-        for i in range(1000):
-            r_axis = np.random.uniform(0,1,3)
-            axis_s_ = []
-            for mat_1 in sym_draw_list:
-                vr_axis = np.dot(mat_1[:3, :3], r_axis) + mat_1[:3, 3]
-                axis_s_.append(vr_axis)
-            axis_s_ = np.array(axis_s_)
-            distances = spatial.distance.cdist(axis_s_, axis_s_, metric='euclidean').reshape((-1))
-            distances_0 = distances[distances == 0]
-            if distances_0.shape[0] == axis_s_.shape[0]:
-                status_aware = 1
+        distinct_orbit_found = 0
+        for i in range(config.orbit_probe_attempts):
+            reference_point = np.random.uniform(0,1,3)
+            orbit_points = []
+            for transform in orbit_transforms:
+                transformed_reference = np.dot(transform[:3, :3], reference_point) + transform[:3, 3]
+                orbit_points.append(transformed_reference)
+            orbit_points = np.array(orbit_points)
+            distances = spatial.distance.cdist(orbit_points, orbit_points, metric='euclidean').reshape((-1))
+            zero_distances = distances[distances == 0]
+            if zero_distances.shape[0] == orbit_points.shape[0]:
+                distinct_orbit_found = 1
                 break
-        if status_aware == 0: raise ValueError("status aware")
-        if sym_aware:
-            rand_Color = np.random.randint(0, 255, (len(sym_draw_list), 3)).astype('int')
-            vertices_ = model_i_['vertices']
-            vertices_sym = []
-            for mat_1 in sym_draw_list:
-                vertices_sym.append(np.dot(mat_1[:3,:3], vertices_.T).T + mat_1[:3,3] - r_axis)
-            vertices_sym = np.array(vertices_sym)
-            vertices_sym = np.linalg.norm(vertices_sym, axis = 2)
-            vertices_sym = np.argmin(vertices_sym, axis=0)
-            colors_ = np.zeros((model_i_['colors'].shape[0], 4))
-            for i, rand_Color_i in enumerate(rand_Color):
-                colors_[vertices_sym == i, :3] = rand_Color_i
-            colors_[:,3] = 255
-            model_i_['sym_colors'] = colors_.astype(np.float32)/255
-        model_i_["min_x"] = np.min(model_i_['vertices'][:, 0])
-        model_i_["min_y"] = np.min(model_i_['vertices'][:, 1])
-        model_i_["min_z"] = np.min(model_i_['vertices'][:, 2])
-        model_i_["size_x"] = np.max(model_i_['vertices'][:, 0]) - np.min(model_i_['vertices'][:, 0])
-        model_i_["size_y"] = np.max(model_i_['vertices'][:, 1]) - np.min(model_i_['vertices'][:, 1])
-        model_i_["size_z"] = np.max(model_i_['vertices'][:, 2]) - np.min(model_i_['vertices'][:, 2])
-        model_i_[sym_op] = symmetries_discrete.tolist()
-        
-    return model_i_
+        if distinct_orbit_found == 0:
+            raise ValueError("Could not find distinct points for the symmetry orbit.")
+        if color_symmetry_orbits:
+            orbit_colors = np.random.randint(0, 255, (len(orbit_transforms), 3)).astype('int')
+            apply_symmetry_orbit_colors(
+                model,
+                orbit_transforms,
+                reference_point=reference_point,
+                orbit_colors=orbit_colors,
+            )
+        _apply_model_bounds(model)
+        model[symmetry_operation] = symmetries_discrete.tolist()
+
+    return model

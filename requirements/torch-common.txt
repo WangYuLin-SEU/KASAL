@@ -1,0 +1,5 @@
+# Shared by both torch profiles; install through torch-cpu.txt or torch-gpu.txt.
+--extra-index-url https://miropsota.github.io/torch_packages_builder
+
+iopath>=0.1.10,<0.2
+fvcore>=0.1.5,<0.2

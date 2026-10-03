@@ -1,93 +1,32 @@
-# Author: Yulin Wang (yulinwang@seu.edu.cn)
+# KASAL project & GitHub: Yulin Wang (王宇林, yulinwang@seu.edu.cn)
+# KASAL 项目与 GitHub：王宇林 Yulin Wang (yulinwang@seu.edu.cn)
+# KASALv2 algorithm: Mengxin Zhang (张梦欣, mx.zhang@seu.edu.cn)
+# KASALv2 算法主要设计：张梦欣 Mengxin Zhang (mx.zhang@seu.edu.cn)
+# Maintenance & pip packaging: Hu Mengting (胡梦婷, 220240361@seu.edu.cn)
+# 维护与 pip 打包：胡梦婷 Hu Mengting (220240361@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
+# 东南大学机械工程学院
 
-import os, json
-import kasal.config.config as config
+from __future__ import annotations
 
-def load_json2dict(path):
-    
-    with open(path, 'r') as f:
-        dict_ = json.load(f)
-    f.close()
-    return dict_
+import json
+import os
+from pathlib import Path
+from typing import Any
 
-def write_dict2json(path, dict):
-    
-    with open(path, 'w') as f:
-        json.dump(dict, f,indent=4)
-    f.close()
-    return
+from kasal.utils.atomic_file import atomic_output_path
 
-def get_all_ply_obj(dir):
-    """ Load all files with the extensions .ply and .obj, excluding files with the suffix _sym.ply."""
-    
-    Filelist = []
-    for home, dirs, files in os.walk(dir):
-        for filename in files:
-            if filename.endswith('.ply') or filename.endswith('.obj'):
-                if not filename.endswith('_sym.ply'):
-                    Filelist.append(os.path.join(home, filename))
-    return Filelist
 
-def save_symmetry_type():
-    """ Save the rotational symmetry information of the current object."""
-    
-    if config.ui_int > config.ui_int_upper:
-        ui_int_c = config.ui_int_upper
-    else:
-        ui_int_c = config.ui_int
-    if config.ui_int <  2:
-        ui_int_c = 2
-    else:
-        ui_int_c = config.ui_int
-    if config.ui_options_selected != 'None':
-        symmetry_type_dict = {
-            'sym_type' : config.ui_options_selected,
-            'n-fold' : ui_int_c,
-            'ADI-C' : config.is_true2,
-            'current_obj_info' : config.current_obj_info,
-        }
-        if config.ui_xyz_options_selected != 'None':
-            symmetry_type_dict['axis_xyz'] = config.ui_xyz_options_selected
-        f_ = config.files_name_list[config.current_file_id]
-        sym_type_file = os.path.join(os.path.dirname(f_), os.path.basename(f_).split('.')[0]+'_sym_type.json')
-        write_dict2json(sym_type_file, symmetry_type_dict)
-    else:
-        try:
-            f_ = config.files_name_list[config.current_file_id]
-            sym_type_file = os.path.join(os.path.dirname(f_), os.path.basename(f_).split('.')[0]+'_sym_type.json')
-            os.remove(sym_type_file)
-        except:
-            1
-        try:
-            f_ = config.files_name_list[config.current_file_id]
-            sym_type_file = os.path.join(os.path.dirname(f_), os.path.basename(f_).split('.')[0]+'_sym.ply')
-            os.remove(sym_type_file)
-        except:
-            1
-    return
+def load_json(path: str | Path) -> Any:
+    with open(path, "r", encoding="utf-8-sig") as f:
+        return json.load(f)
 
-def load_symmetry_type():
-    """ Load the rotational symmetry information of the current object."""
-    
-    print('id / N : %s / %s'%(str(config.current_file_id), str(len(config.files_name_list))))
-    
-    write_dict2json(config.start_id_json_file, 
-                    {
-                        'start_id' : config.current_file_id,
-                    }
-                    )
-    f_ = config.files_name_list[config.current_file_id]
-    print(f_)
-    sym_type_file = os.path.join(os.path.dirname(f_), os.path.basename(f_).split('.')[0]+'_sym_type.json')
-    if os.path.exists(sym_type_file):
-        symmetry_type_dict = load_json2dict(sym_type_file)
-        config.ui_options_selected = symmetry_type_dict['sym_type']
-        config.ui_int = symmetry_type_dict['n-fold']
-        config.is_true2 = symmetry_type_dict['ADI-C']
-        config.current_obj_info = symmetry_type_dict['current_obj_info']
-        if 'axis_xyz' in symmetry_type_dict:
-            config.ui_xyz_options_selected = symmetry_type_dict['axis_xyz']
-        else:
-            config.ui_xyz_options_selected = 'None'
-    return
+
+def write_json(path: str | Path, data: Any, *, ensure_ascii: bool = True) -> None:
+    """Atomically replace a JSON file without truncating the previous version."""
+
+    with atomic_output_path(path) as temporary:
+        with temporary.open("w", encoding="utf-8", newline="\n") as f:
+            json.dump(data, f, indent=4, ensure_ascii=ensure_ascii)
+            f.flush()
+            os.fsync(f.fileno())

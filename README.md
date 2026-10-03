@@ -1,163 +1,180 @@
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/kasalv2/kasal/datasets/kasal_icon.png" alt="KASAL" width="75%">
+  <img src="kasal/datasets/kasal_icon.png" alt="KASAL" width="75%">
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/kasal-6d/">
-    <img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version">
-  </a>
-  <a href="https://pepy.tech/project/kasal-6d">
-    <img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads">
-  </a>
-  <a href="https://github.com/WangYuLin-SEU/KASAL/releases/">
-    <img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases Downloads">
-  </a>
+  <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version"></a>
+  <a href="https://pepy.tech/project/kasal-6d"><img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads"></a>
+  <a href="https://github.com/WangYuLin-SEU/KASAL/releases/"><img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases Downloads"></a>
 </p>
 
-# <img src="/kasal/datasets/K8.ico" width="36"> KASAL: Key-Axis-based Symmetry Axis Localization
+<div align="center">
 
+**English** | [中文](README_zh.md) · [Install](docs/install.md) | [安装](docs/install_zh.md)
 
-KASAL is a project designed for determining the symmetry axis orientation and the rotation center of rotationally symmetric objects. When using KASAL, users need to specify one of the eight predefined rotational symmetry types. Based on the selected type, KASAL identifies all symmetry axes on the given object model. Upon completion of symmetry axis localization, KASAL automatically saves the rotational symmetry information in the [BOP format](https://bop.felk.cvut.cz/ "BOP Website"). This structured symmetry information facilitates seamless integration with 6D pose estimation methods that support the BOP format. Moreover, the extracted symmetry data is beneficial for various applications, including 3D reconstruction, object recognition, and related computer vision tasks.
-
-### <img src="/kasal/datasets/K16.png" width="28">  News!
-***
-- **Sep 2025**: 🎉 KASAL now officially supports **Windows** and **Ubuntu (Linux)** platforms! 
-- **Mar 2025**: 🤗 KASAL has been fully **open-sourced** on GitHub and PyPI.
-- **Dec 2024**: 📄 The paper "Key-Axis-based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture" is now available at [DOI: 10.1109/TIP.2024.3515801](https://doi.org/10.1109/TIP.2024.3515801).
-
-
-### <img src="/kasal/datasets/K17.png" width="28">  Datasets
-*** 
-To identify which objects exhibit rotational symmetry, you can download the DSRSTO dataset provided with KASAL. Additionally, we have utilized KASAL to determine the symmetry axes of objects in the Google Scanned Objects (GSO) and ShapeNet datasets.
-
-Below are the links to these three datasets:
-
-* DSRSTO: https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset
-* GSO: https://huggingface.co/datasets/SEU-WYL/GSO-SAD
-* ShapeNet: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
-
-
-### <img src="/kasal/datasets/K9.png" width="28">  Installation
-*** 
-* **Platform Support**:  KASAL now supports both **Windows** and **Ubuntu (Linux)** 🎉
-
->| Platform | Tested Version |
->|----------|----------------|
->| Windows  | Windows 10     | 
->| Ubuntu   | 20.04+ (glibc ≥ 2.31) |
-* **Requirements**: Anaconda 3, MeshLab
-* **Install via PyPI**
-
-KASAL is now available on **PyPI**, you can install it directly using:
-``````
-    pip install kasal-6d
-``````
-* **Manual Installation**
-
-If you want to install KASAL manually, use the following commands:
-``````
-    conda create -n kasal python=3.10
-    conda activate kasal
-    pip install -r requirements.txt # Only needed for manual installation
-``````
-> **⚠️Note**:  
-> If you encounter compatibility issues with the default installation, you can install our recommended environment with:
-> ```
->     pip install kasal-6d[recommended]
->     # or
->     pip install -r requirements_recommended.txt 
-> ```
-* **Quick Start**
-
-After installation, you can quickly test KASAL by running the following demo scripts:
-``````
-    python demo_texture_meshes.py  
-    # or    
-    python demo_shape_meshes.py
-``````
-This will launch the KASAL application and process the example dataset.
-
-### <img src="/kasal/datasets/K10.png" width="28">  Rotational Symmetry Types
-***
-KASAL supports a total of eight rotational symmetry types, which include three continuous rotational symmetries and five discrete rotational symmetries.
-
-<div style="text-align: center;">
-  <img src="/kasal/datasets/fig1.png" alt="">
 </div>
 
-In KASAL, you can select any rotational symmetry type from the **"Symmetry Type"** dropdown menu and then click **"Cal Current Obj"** to localize the symmetry axes on the object.  
+# KASALv2: Fully Automatic 3D Rotational Symmetry Classification and Axis Localization
 
-Additionally, for **The n-fold Prismatic Rotational Symmetry** and **The n-fold Pyramidal Rotational Symmetry**, users must specify the order of rotational symmetry, denoted as *n*.
+KASALv2 automatically classifies 3D rotational symmetry, estimates rotational order, and localizes the complete set of symmetry axes without requiring a predefined symmetry type. The repository also retains the original **kasalv1** user-guided workflow in the same desktop application.
 
-### <img src="/kasal/datasets/K11.png" width="28">  Symmetry Axis Localization Results
-***
-Given a **regular dodecahedron** and its specified rotational symmetry type, KASAL can accurately determine the **orientations of all symmetry axes** and the **rotation center** on the object model.  
+**Paper:** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-Furthermore, KASAL provides a **visual representation** of these symmetry axes, including their **directions, orders, and the rotation center**.
+> **Release status (checked 2026-10-02):** the integrated KASALv2 code is distributed from this repository and is not part of the current [`kasal-6d` PyPI package](https://pypi.org/project/kasal-6d/), which remains the classic kasalv1 release. Objaverse-SAD is not yet listed on the official [SEU-WYL Hugging Face profile](https://huggingface.co/SEU-WYL).
 
-<div style="text-align: center; ">
-  <img src="/kasal/datasets/result-p20-1.png" alt="">
-</div>
+## Highlights
 
-In the visualization of **symmetry axis directions** and the **rotation center**, KASAL places the **arrow’s starting point at the rotation center** and aligns its **direction with the symmetry axis**.  
+- Fully automatic classification and localization across eight canonical 3D rotational-symmetry types
+- Geometry analysis with an optional texture-aware refinement layer
+- Integrated GUI with automatic **kasalv2** and user-guided **kasalv1** engines
+- CPU and CUDA profiles for desktop or headless execution
+- Incremental batch processing of unsaved objects and standalone dataset processing
+- BOP-compatible symmetry payloads for downstream 6D pose-estimation workflows
 
-For the visualization of **symmetry axis order**, KASAL first generates a **set of transformation matrices** that satisfy the specified rotational symmetry. It then applies these matrices to **recolor the object’s vertices** accordingly.
+## Quick start
 
-<div style="text-align: center; ">
-  <img src="/kasal/datasets/result-p20-2.png" alt="">
-</div>
+Python 3.10 and conda are recommended. Choose `full-gpu` only for a compatible NVIDIA/CUDA system.
 
-### <img src="/kasal/datasets/K12.png" width="28">  Batch Processing
-*** 
-Given a directory path (e.g., `mesh_path`), KASAL will automatically load all 3D model files from the subfolders within this directory. You then need to manually specify each model's **symmetry type**, **order (if applicable)**, and whether it exhibits **texture rotational symmetry**.  
+```bash
+git clone https://github.com/WangYuLin-SEU/KASAL.git
+cd KASAL
+conda create -n kasal python=3.10
+conda activate kasal
+python scripts/install_deps.py full-cpu
+python scripts/verify_pytorch3d.py
+python demo_shape_meshes.py
+```
 
-Once the rotational symmetry information for all objects has been determined, you can click **"Cal All Objs"** to perform batch symmetry axis localization for all models.  
+For texture-aware examples, run `python demo_texture_meshes.py`. See the [installation guide](docs/install.md) for GPU, Linux, headless, and troubleshooting instructions.
 
-Additionally, KASAL automatically saves the specified rotational symmetry information when switching between objects. However, for the **last object in the directory**, please switch back to the previous object to ensure the data is saved.  
+## Choose a workflow
 
-If there is only **one object** in the directory, clicking **"Cal Current Obj"** or **"Cal All Objs"** will complete the symmetry axis localization and automatically save the specified symmetry information.
+| Goal | Entry point | Output |
+|------|-------------|--------|
+| Explore or annotate meshes in the GUI | `python demo_shape_meshes.py` | Sidecar `*_sym_type.json` and visualization `*_sym.ply` |
+| Analyze textured examples in the GUI | `python demo_texture_meshes.py` | The same sidecar files, with texture-aware analysis enabled from the UI |
+| Run GUI-equivalent jobs without Polyscope | `python -m kasal.cli.run_job kasal/jobs/example_job.json` | Sidecar files beside each source mesh |
+| Process a flat dataset into a separate output tree | `python -m kasal.rotational_symmetry.run_dataset --input-dir INPUT --output-dir OUTPUT` | Per-object BOP-style JSON plus batch JSON/CSV summaries |
+| Use the classic manual kasalv1 workflow | Select a type/order in the integrated GUI, or install `kasal-6d` | User-guided axis localization |
 
-``````
-from kasal.app.polyscope_app import app
+The GUI recursively discovers `.ply` and `.obj` files and ignores generated `*_sym.ply` files. The KASALv2 loader can also read `.glb`, `.gltf`, `.stl`, and `.off` when those files are supplied explicitly through a job or a matching dataset-runner pattern.
 
-mesh_path = 'The directory of your 3D model dataset'
+## Usage essentials
 
-app(mesh_path)
+On the **Setup** page, choose the dataset folder, preprocessing policy, and compute device, then click **Confirm**. For most new datasets, keep the engine on **kasalv2**.
 
-``````
+- Unlabeled objects use kasalv2 automatic analysis.
+- User-edited symmetry types/orders and forced X/Y/Z fitting use kasalv1.
+- `kasalv2_adaptive` is the recommended desktop preprocessing policy; `kasalv2_strict` is suitable for headless environments without PyMeshLab.
+- **Cal All (unsaved)** processes only objects without a saved result or objects edited since loading.
+- Each completed object writes `{stem}_sym_type.json` and, when applicable, `{stem}_sym.ply` beside the source mesh.
 
-### <img src="/kasal/datasets/K13.png" width="28">  Texture Rotational Symmetry
-***
-In real-world scenarios, most rotationally symmetric objects exhibit **geometric rotational symmetry**, while a smaller number of objects possess **texture rotational symmetry**.  
+The standalone dataset runner uses a separate output directory and writes one BOP-style JSON per object plus JSON/CSV batch summaries. Its command-line options are available with:
 
-By default, KASAL employs a **geometry-based symmetry axis localization mode**. If an object exhibits texture rotational symmetry, users need to manually enable the **"ADI-C"** option.
+```bash
+python -m kasal.rotational_symmetry.run_dataset --help
+```
 
+## Method overview
 
-### <img src="/kasal/datasets/K14.png" width="28">  Assisted Localization
-***
-KASAL performs well for most objects, but it may encounter errors when handling **imperfect or approximately rotationally symmetric objects**.  
+```text
+mesh
+  -> load, normalize, and sample geometry
+  -> search for the dominant high-order axis
+  -> estimate rotational periodicity and order
+  -> recover secondary axes and classify the symmetry family
+  -> optionally refine symmetry using appearance
+  -> export BOP-compatible symmetry data
+```
 
-If KASAL fails to correctly localize the symmetry axes, you can enable **"show xyz"** and manually select the **x, y, or z axis** that you believe is closest to the **primary key axis**.  
+KASALv2 first localizes a dominant high-order axis, infers its rotational order through self-consistency analysis, and reconstructs the full symmetry structure with a hierarchy-guided formulation. Texture analysis is stored separately so that appearance-induced order changes do not overwrite the geometric result.
 
-The **primary key axis** refers to the symmetry axis with the **highest order** on the object.
+On the 438 symmetric GSO objects reported in the paper, KASALv2 reaches **94.75%** classification accuracy. The paper also reports gains of up to **0.9%** when the estimated priors are used to train FoundationPose across five BOP datasets.
 
-<div style="text-align: center; ">
-  <img src="/kasal/datasets/show xyz.png" alt="">
-</div>
+## kasalv1 and KASALv2
 
-### <img src="/kasal/datasets/K15.png" width="28">  Citation
-***
-If you find our work useful, please cite it as follows: 
+| | kasalv1 | KASALv2 |
+|---|---|---|
+| Input | User-selected symmetry type and, when needed, order | No predefined type or order |
+| Main use | Review, correction, and forced X/Y/Z-axis fitting | Automatic annotation of new meshes and datasets |
+| Core stack | PyMeshLab-based preprocessing and key-axis templates | PyTorch3D, axis search, periodicity, and consistency analysis |
+| Distribution | [`kasal-6d` on PyPI](https://pypi.org/project/kasal-6d/) | Source from this repository |
+| Guide | [Classic kasalv1 guide](docs/README_kasalv1.md) | This README |
+
+## Interface
+
+The **Setup** page selects the dataset folder, interface language, preprocessing policy, and compute device.
+
+<p align="center">
+  <img src="kasal/datasets/v2-1-en.png" alt="KASALv2 Setup page" width="720">
+</p>
+
+After confirmation, the **KASAL** page provides object navigation, annotation controls, engine selection, single-object computation, and incremental batch computation.
+
+<p align="center">
+  <img src="kasal/datasets/v2-2-en.png" alt="KASALv2 main page" width="720">
+</p>
+
+## Guides
+
+| Document | Purpose |
+|----------|---------|
+| [Installation](docs/install.md) | Dependency profiles, CPU/GPU setup, Linux packages, and troubleshooting |
+| [Classic kasalv1 guide](docs/README_kasalv1.md) | Manual symmetry-type workflow retained for existing users |
+
+## Source layout
+
+| Directory | Responsibility |
+|-----------|----------------|
+| `kasal/app/`, `kasal/cli/` | GUI and headless job entry points |
+| `kasal/compute/` | Shared job execution, engine routing, and worker processes |
+| `kasal/config/` | `algorithms.py` holds v1/v2 and mesh preprocessing parameters; `runtime.py` holds GUI settings and state |
+| `kasal/annotations/` | Annotation formats, sidecar paths, and saved state; `io.py` handles formats and `state.py` manages application state |
+| `kasal/keyaxis/`, `kasal/symmetry_lab/` | kasalv1 key-axis search, symmetry templates, and axis localization |
+| `kasal/rotational_symmetry/` | KASALv2 automatic analysis and standalone dataset runner |
+| `kasal/geometry/`, `kasal/viz/` | Shared geometry processing and visualization export |
+| `kasal/utils/`, `kasal/datasets/` | General utilities, sample meshes, and resource paths |
+
+Python modules and functions use `snake_case`; classes use `PascalCase`. Application entry points call `compute`, while algorithm modules perform analysis. General JSON I/O lives in `utils/io_json.py` and does not depend on annotation or GUI state. Call implementations directly with named parameters or typed configuration objects; do not add forwarding wrappers or `*args`/`**kwargs` adapters. Algorithm overrides are passed through `config=...`; the dataset runner resolves the device and FPS override before constructing its analysis config.
+
+## Datasets
+
+- [DSRSTO](https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset)
+- [GSO-SAD](https://huggingface.co/datasets/SEU-WYL/GSO-SAD)
+- [ShapeNet-SAD](https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD)
+- **Objaverse-SAD (~35,000 objects):** in preparation; no public download link has been announced as of 2026-10-02
+
+## License
+
+This repository, including the integrated KASALv2 source release, is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use is not permitted by this license; contact Yulin Wang ([yulinwang@seu.edu.cn](mailto:yulinwang@seu.edu.cn)) for licensing questions.
+
+The separately distributed classic `kasal-6d` PyPI package is licensed under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+## Citation
+
+If you use KASALv2, cite the CVPR 2026 paper:
+
 ```bibtex
-@ARTICLE{KASAL,
-  author = {Wang, Yulin and Luo, Chen},
-  title  = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture}, 
-  journal= {IEEE Transactions on Image Processing}, 
-  year   = {2024},
-  volume = {33},
-  pages  = {6720-6733},
-  doi    = {10.1109/TIP.2024.3515801}
+@InProceedings{Zhang_2026_CVPR,
+  author    = {Zhang, Mengxin and Wang, Yulin and Luo, Chen and Li, Yongzhe and Zhou, Yijun},
+  title     = {KASALv2: Fully Automatic 3D Rotational Symmetry Classification and Axis Localization},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  month     = {June},
+  year      = {2026},
+  pages     = {13866--13875}
 }
 ```
 
+If you use the original kasalv1 method, also cite:
+
+```bibtex
+@ARTICLE{KASAL,
+  author  = {Wang, Yulin and Luo, Chen},
+  title   = {Key-Axis-Based Localization of Symmetry Axes in 3D Objects Utilizing Geometry and Texture},
+  journal = {IEEE Transactions on Image Processing},
+  year    = {2024},
+  volume  = {33},
+  pages   = {6720--6733},
+  doi     = {10.1109/TIP.2024.3515801}
+}
+```

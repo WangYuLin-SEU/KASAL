@@ -1,25 +1,30 @@
-# Author: Yulin Wang (yulinwang@seu.edu.cn)
+# KASAL project & GitHub: Yulin Wang (王宇林, yulinwang@seu.edu.cn)
+# KASAL 项目与 GitHub：王宇林 Yulin Wang (yulinwang@seu.edu.cn)
+# KASALv2 algorithm: Mengxin Zhang (张梦欣, mx.zhang@seu.edu.cn)
+# KASALv2 算法主要设计：张梦欣 Mengxin Zhang (mx.zhang@seu.edu.cn)
+# Maintenance & pip packaging: Hu Mengting (胡梦婷, 220240361@seu.edu.cn)
+# 维护与 pip 打包：胡梦婷 Hu Mengting (220240361@seu.edu.cn)
 # School of Mechanical Engineering, Southeast University, China
+# 东南大学机械工程学院
 
-import numpy as np 
+"""Canonical axis templates used to localize discrete rotational symmetries."""
 
-def clear_sym(model_i_):
-    """ This function removes all rotational symmetry information from model_i_.  
-    Parameters:  
-        model_i_: Object model information.  
-    """
-    
-    mks_ = []
-    mks = model_i_.keys()
-    for key_i in mks:
-        mks_.append(key_i)
-    for key_i in mks_:
-        if key_i in ["No Sym", "sym_colors", "symmetries_continuous","symmetries_continuous_2","symmetries_continuous_3", "symmetries_discrete"]:
-            del model_i_[key_i]
-            
-sym_axis_temp = {}
+import numpy as np
 
-sym_axis_temp["P(4): Tetrahedral Item"] = \
+def clear_symmetry_fields(model):
+    """Clear symmetry output and orbit colors, retaining geometry and axis helpers."""
+
+    field_names = []
+    model_fields = model.keys()
+    for field_name in model_fields:
+        field_names.append(field_name)
+    for field_name in field_names:
+        if field_name in ["No Sym", "sym_colors", "symmetries_continuous","symmetries_continuous_2","symmetries_continuous_3", "symmetries_discrete"]:
+            del model[field_name]
+
+POLYHEDRAL_AXIS_TEMPLATES = {}
+
+POLYHEDRAL_AXIS_TEMPLATES["P(4): Tetrahedral Item"] =\
     [
         {
             "axis_l": [
@@ -93,7 +98,7 @@ sym_axis_temp["P(4): Tetrahedral Item"] = \
         }
     ]
 
-sym_axis_temp["P(8): Octahedral Item"] = \
+POLYHEDRAL_AXIS_TEMPLATES["P(8): Octahedral Item"] =\
     [
         {
             "axis_l": [
@@ -227,7 +232,7 @@ sym_axis_temp["P(8): Octahedral Item"] = \
         }
     ]
 
-sym_axis_temp["P(20): Icosahedral Item"] = \
+POLYHEDRAL_AXIS_TEMPLATES["P(20): Icosahedral Item"] =\
     [
         {
             "axis_l": [
@@ -540,64 +545,25 @@ sym_axis_temp["P(20): Icosahedral Item"] = \
             "num": 2
         }
     ]
-    
-def get_sym_axis_temp(sym_key, N=2):
-    if sym_key == 'None' or sym_key is None:
+
+def get_symmetry_axis_template(symmetry_type, n_fold=2):
+    """Return a discrete-axis template, or None for other families.
+
+    The num field is fold minus one. Shared polyhedral templates are read-only."""
+
+    if symmetry_type == 'None' or symmetry_type is None:
         return None
-    if sym_key in sym_axis_temp:
-        return sym_axis_temp[sym_key]
-    else:
-        if sym_key == "D(=1): n-fold Pyramidal Item":
-            l_ = []
-            l_.append(
-                {
-                    "axis_l": [
-                        [
-                            0.0,
-                            0.0,
-                            1.0
-                        ]
-                    ],
-                    "num": N - 1
-                }
-            )
-            return l_
-
-        elif sym_key == "D(>1): n-fold Prismatic Item":
-            l_ = []
-            l_.append(
-                        {
-                            "axis_l": [
-                                [
-                                    0.0,
-                                    0.0,
-                                    1.0
-                                ]
-                            ],
-                            "num": N - 1
-                        }
-                    )
-            for i_ in range(N):
-                a_ = i_/N * np.pi
-                l_.append(
-                            {
-                                "axis_l": [
-                                    [
-                                        np.cos(a_),
-                                        np.sin(a_),
-                                        0.0
-                                    ]
-                                ],
-                                "num": 1
-                            }
-                        )
-            return l_
-        else:
-            return None
-    
-
-    
-    
-    
-    
-    
+    if symmetry_type in POLYHEDRAL_AXIS_TEMPLATES:
+        return POLYHEDRAL_AXIS_TEMPLATES[symmetry_type]
+    if symmetry_type == "D(=1): n-fold Pyramidal Item":
+        return [{"axis_l": [[0.0, 0.0, 1.0]], "num": n_fold - 1}]
+    if symmetry_type == "D(>1): n-fold Prismatic Item":
+        axis_template = [{"axis_l": [[0.0, 0.0, 1.0]], "num": n_fold - 1}]
+        for axis_index in range(n_fold):
+            angle_rad = axis_index / n_fold * np.pi
+            axis_template.append({
+                "axis_l": [[np.cos(angle_rad), np.sin(angle_rad), 0.0]],
+                "num": 1,
+            })
+        return axis_template
+    return None

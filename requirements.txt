@@ -1,15 +1,6 @@
-imageio
-pypng
-pytz
-open3d
-tqdm
-chardet
-trimesh
-pywin32; platform_system == "Windows"
-fpsample==0.3.3
-polyscope
-numpy
-opencv-python
-opencv-contrib-python
-pymeshlab==2023.12.post1
-scipy
+# Default: full-cpu. Equivalent to python scripts/install_deps.py full-cpu.
+# Other profiles and verification: requirements/README.md and docs/install.md.
+
+-r requirements/base.txt
+-r requirements/torch-cpu.txt
+-r requirements/gui.txt
