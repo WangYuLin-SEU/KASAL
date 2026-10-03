@@ -27,6 +27,6 @@ def write_json(path: str | Path, data: Any, *, ensure_ascii: bool = True) -> Non
 
     with atomic_output_path(path) as temporary:
         with temporary.open("w", encoding="utf-8", newline="\n") as f:
-            json.dump(data, f, indent=4, ensure_ascii=ensure_ascii)
+            json.dump(data, f, indent=4, ensure_ascii=ensure_ascii, allow_nan=False)
             f.flush()
             os.fsync(f.fileno())

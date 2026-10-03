@@ -4,6 +4,15 @@ __pycache__/
 .pytest_cache/
 .vscode/
 
+# Local notes and release handoff materials
+/.local/
+
+# Local packaging environment and build output
+.venv-publish/
+build/
+dist/
+*.egg-info/
+
 # Local GUI / runtime state
 imgui.ini
 .polyscope.ini

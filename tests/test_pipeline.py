@@ -87,6 +87,19 @@ def test_dataset_cli_writes_results_and_reports_failures(colored_mesh, v2_analys
     assert "valid family" in failure["error"]
     assert bop_path.read_bytes() == before
 
+    v2_analysis.raw = {
+        "has_rot_sym": True,
+        "rot_sym_type": "D(=1): n-fold Pyramidal Item",
+        "sym_op": "symmetries_discrete",
+        "rot_sym_axis": [[float("nan"), 0, 1]],
+    }
+    assert run_dataset.main() == 1
+    failure, = json.loads((output / "batch_summary.json").read_text(encoding="utf-8"))
+    assert not failure["success"] and failure["output"] is None
+    assert failure["error"]
+    assert bop_path.read_bytes() == before
+
+
 
 def test_csv_summary_preserves_previous_file_on_failure(monkeypatch, tmp_path):
     output = tmp_path / "output"

@@ -46,7 +46,7 @@ def test_annotation_write_failure_preserves_previous_file(monkeypatch, tmp_path)
     target = tmp_path / "mesh_sym_type.json"
     target.write_text('{"old": true}', encoding="utf-8")
 
-    def fail_after_partial_write(value, stream, *, indent, ensure_ascii):
+    def fail_after_partial_write(value, stream, **kwargs):
         stream.write("{")
         raise RuntimeError("simulated write failure")
 

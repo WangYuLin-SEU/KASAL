@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI 版本"></a>
-  <a href="https://pepy.tech/project/kasal-6d"><img src="https://static.pepy.tech/badge/kasal-6d" alt="下载量"></a>
+  <a href="https://pepy.tech/projects/kasal-6d"><img src="https://api.pepy.tech/badge/kasal-6d" alt="PyPI 下载量"></a>
   <a href="https://github.com/WangYuLin-SEU/KASAL/releases/"><img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases 下载量"></a>
 </p>
 
@@ -20,7 +20,7 @@ KASALv2 无需预先指定对称类型，即可自动完成三维旋转对称分
 
 **论文：** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-> **发布状态（核对于 2026-10-02）：** 集成版 KASALv2 目前通过本仓库源码发布，尚未包含在现有的 [`kasal-6d` PyPI 包](https://pypi.org/project/kasal-6d/)中；该包仍是经典 kasalv1。Objaverse-SAD 目前也尚未出现在官方 [SEU-WYL Hugging Face 主页](https://huggingface.co/SEU-WYL)。
+> **PyPI 包名：** KASALv2 **2.0.0** 已正式发布为 [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/)，承接经典 0.1.x 包版本线，提供集成 kasalv1 + KASALv2 的桌面应用。KASALv2 后续版本沿用 `kasal-6d` 包名。Objaverse-SAD 目前正在整理中，后续将正式发布。
 
 ## 主要特点
 
@@ -32,6 +32,20 @@ KASALv2 无需预先指定对称类型，即可自动完成三维旋转对称分
 - 输出兼容 BOP 对称字段，可用于下游 6D 位姿估计流程
 
 ## 快速开始
+
+KASALv2 2.0.0 支持 Python 3.10，默认包含桌面依赖。先安装匹配的 PyTorch/PyTorch3D 运行环境，再从 PyPI 安装 KASALv2。CPU 示例：
+
+```bash
+conda create -n kasalv2 python=3.10
+conda activate kasalv2
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
+python -m pip install kasal-6d==2.0.0
+kasalv2 --help
+```
+
+CUDA 环境请在新环境中使用匹配的 `torch-gpu.txt`，详见[安装说明](docs/install_zh.md#pypi-正式版本)。如果在同一环境中从独立的 `kasalv2` 包迁移，请先卸载它再安装 `kasal-6d`，因为两者使用相同的 `kasal` 导入目录。
+
+从源码运行：
 
 推荐使用 Python 3.10 与 conda。仅在具备兼容 NVIDIA/CUDA 环境时选择 `full-gpu`。
 
@@ -55,7 +69,7 @@ python demo_shape_meshes.py
 | 在 GUI 中分析纹理示例 | `python demo_texture_meshes.py` | 相同 sidecar 文件；在界面中启用纹理感知分析 |
 | 不启动 Polyscope，执行与 GUI 相同的任务 | `python -m kasal.cli.run_job kasal/jobs/example_job.json` | 写在源网格旁的 sidecar 文件 |
 | 将平铺数据集处理到独立输出目录 | `python -m kasal.rotational_symmetry.run_dataset --input-dir INPUT --output-dir OUTPUT` | 逐对象 BOP 风格 JSON，以及批量 JSON/CSV 汇总 |
-| 使用经典 kasalv1 手动流程 | 在集成 GUI 中选择类型/阶数，或安装 `kasal-6d` | 用户引导的对称轴定位 |
+| 使用经典 kasalv1 手动流程 | 在集成 GUI 中选择类型/阶数；原版应用使用 `kasal-6d==0.1.4` | 用户引导的对称轴定位 |
 
 GUI 会递归发现目录内的 `.ply` 和 `.obj`，并忽略生成的 `*_sym.ply`。如果通过任务列表或数据集运行器的匹配模式显式传入文件，KASALv2 加载器还支持 `.glb`、`.gltf`、`.stl` 和 `.off`。
 
@@ -98,7 +112,7 @@ KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以
 | 输入 | 用户选择对称类型，必要时指定阶数 | 无需预定义类型或阶数 |
 | 主要用途 | 复核、修正与强制 X/Y/Z 轴拟合 | 自动标注新网格和数据集 |
 | 核心实现 | PyMeshLab 预处理与主轴模板 | PyTorch3D、轴搜索、周期性与一致性分析 |
-| 发布方式 | [PyPI 上的 `kasal-6d`](https://pypi.org/project/kasal-6d/) | 本仓库源码 |
+| 发布方式 | 经典 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/)；集成应用也保留该流程 | 集成版 [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) 及本仓库源码 |
 | 手册 | [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 本 README |
 
 ## 界面
@@ -135,20 +149,20 @@ KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以
 | `kasal/geometry/`、`kasal/viz/` | 共用几何处理与可视化导出 |
 | `kasal/utils/`、`kasal/datasets/` | 通用工具、示例模型和资源路径 |
 
-Python 模块与函数使用 `snake_case`，类使用 `PascalCase`。应用入口调用 `compute`，算法模块负责计算；通用 JSON 读写位于 `utils/io_json.py`，不依赖标注或 GUI 状态。通过明确参数或配置对象直接调用实现，不增加转发包装及 `*args`/`**kwargs` 适配层。算法参数通过 `config=...` 传入；数据集入口解析设备与 FPS 覆盖值后构建分析配置。
+代码结构将应用入口、运行状态、标注读写、几何工具以及 KASALv1/KASALv2 算法模块分离。算法参数集中在 `kasal/config/algorithms.py`，可变的 GUI 与运行时状态集中在 `kasal/config/runtime.py`。
 
 ## 数据集
 
 - [DSRSTO](https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset)
 - [GSO-SAD](https://huggingface.co/datasets/SEU-WYL/GSO-SAD)
 - [ShapeNet-SAD](https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD)
-- **Objaverse-SAD（约 3.5 万件）：** 仍在整理中；截至 2026-10-02 尚无公开下载链接
+- **Objaverse-SAD（约 3.5 万件）：** 正在整理中，计划后续正式发布
 
 ## 许可
 
 本仓库及其中的集成 KASALv2 源码版本采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，该许可不允许商业使用。商业许可问题请联系王宇林（[yulinwang@seu.edu.cn](mailto:yulinwang@seu.edu.cn)）。
 
-独立发布的经典 `kasal-6d` PyPI 包采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。
+历史经典 `kasal-6d` 0.1.x 版本继续采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。集成版 2.0.0 使用当前仓库许可证；内置第三方代码保留各自的许可声明。
 
 ## 引用
 

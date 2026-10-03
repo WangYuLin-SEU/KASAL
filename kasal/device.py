@@ -38,7 +38,7 @@ class HardwareDeviceRow:
 
 
 GPU_INSTALL_CMD = "python scripts/install_deps.py full-gpu"
-GPU_INSTALL_DOC = "KASAL/docs/install.md"
+GPU_INSTALL_DOC = "https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md"
 
 
 def _short_model_name(name: str, *, max_len: int = 56) -> str:

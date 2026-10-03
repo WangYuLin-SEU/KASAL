@@ -36,7 +36,7 @@ You can:
   (1) Install the FULL KASAL environment (includes PyMeshLab for legacy mesh simplify):
       python scripts/install_deps.py full-cpu
       or: python scripts/install_deps.py full-gpu
-      See docs/install.md section "Full vs Headless".
+      See https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md#headless-use.
 
   (2) Fix / standardize your mesh so kasalv2 can load it WITHOUT PyMeshLab:
       - Use triangle mesh (no quads/ngons); watertight or near-watertight preferred

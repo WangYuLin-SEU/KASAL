@@ -3,9 +3,9 @@
 This repository (**KASALv2** integrated release) is licensed under
 **PolyForm Noncommercial License 1.0.0** below — **non-commercial use only**.
 
-> The legacy **kasalv1-only** PyPI package (`pip install kasal-6d`) remains
-> under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
-> and is distributed separately.
+> The historical **kasalv1-only** PyPI releases (`kasal-6d` 0.1.x) remain
+> under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+> The integrated `kasal-6d` 2.0.0 release uses the license below.
 
 **Contact:** Yulin Wang (王宇林, yulinwang@seu.edu.cn) — for commercial licensing inquiries.
 

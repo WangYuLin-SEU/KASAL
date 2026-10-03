@@ -14,16 +14,16 @@
 
 | 发布物 | 内容 | 许可 |
 |--------|------|------|
-| 当前源码仓库 | 集成 kasalv1 + KASALv2 应用 | [PolyForm Noncommercial 1.0.0](../LICENSE) |
-| [PyPI 上的 `kasal-6d`](https://pypi.org/project/kasal-6d/) | 经典 kasalv1 包 | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| 当前源码仓库 / [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) | 集成 kasalv1 + KASALv2 应用 | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| 历史 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/) | 经典 kasalv1 包 | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
 安装经典包：
 
 ```bash
-pip install kasal-6d
+pip install kasal-6d==0.1.4
 ```
 
-如需运行集成源码应用，请按[源码安装指南](install_zh.md)操作。
+集成版应用的 PyPI 与源码安装方法见[安装指南](install_zh.md)。
 
 ## 启动集成 GUI
 
@@ -123,7 +123,7 @@ KASAL 会估计给定对称族蕴含的全部轴以及共享旋转中心。可�
 
 如需可复现的非交互执行，可使用 `python -m kasal.cli.run_job JOB.json`。它通过 `defaults.sym_type`、`defaults.n_fold` 与 `defaults.axis_xyz` 接收相同的手动字段。
 
-独立发布的 PyPI 包保留其[项目页面](https://pypi.org/project/kasal-6d/)所述的经典 kasalv1 应用；其界面可能与当前集成源码应用不同。
+历史 0.1.x 版本保留 [0.1.4 项目页面](https://pypi.org/project/kasal-6d/0.1.4/)所述的经典 kasalv1 应用；其界面可能与集成版 2.0.0 不同。
 
 <a id="datasets"></a>
 

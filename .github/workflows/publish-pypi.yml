@@ -1,0 +1,70 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Version to publish (must match pyproject.toml)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'WangYuLin-SEU/KASAL' && github.ref == 'refs/heads/kasalv2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install build tools
+        run: python -m pip install build twine packaging
+      - name: Build wheel
+        run: python -m build --wheel
+      - name: Check distribution metadata
+        run: python -m twine check --strict dist/*.whl
+      - name: Install wheel for entry-point smoke check
+        run: python -m pip install --no-deps dist/*.whl
+      - name: Confirm the requested production version
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          python - <<'PY'
+          import os
+          from importlib.metadata import version
+          from packaging.version import Version
+
+          actual = version("kasal-6d")
+          expected = os.environ["RELEASE_VERSION"]
+          parsed = Version(actual)
+          if actual != expected or parsed.is_prerelease or parsed.is_devrelease or parsed.local:
+              raise SystemExit(f"Refusing to publish {actual!r}; requested stable version {expected!r}")
+          print(f"Verified production version: {actual}")
+          PY
+      - name: Check installed entry point outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: kasalv2 --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kasal-6d/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
