@@ -140,7 +140,9 @@ def analyze_rotational_symmetry(model_input, tex=False, config: SymmetryAnalysis
         config=cfg,
     )
 
-    if sym_op == "symmetries_discrete":
+    if not has_rot_sym:
+        axis_list, matrices_list = [], []
+    elif sym_op == "symmetries_discrete":
         axis_list, matrices_list = generate_symmetry_transforms(main_n_fold, rot_sym_type, axis_1, axis_2, center_ch)
     else:
         axis_list = [axis_1]
