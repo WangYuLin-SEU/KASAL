@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version"></a>
-  <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/dm/kasal-6d?label=downloads" alt="PyPI Downloads"></a>
+  <a href="https://pepy.tech/projects/kasal-6d"><img src="https://api.pepy.tech/badge/kasal-6d" alt="PyPI Downloads"></a>
   <a href="https://github.com/WangYuLin-SEU/KASAL/releases/"><img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases Downloads"></a>
 </p>
 
@@ -20,7 +20,7 @@ KASALv2 automatically classifies 3D rotational symmetry, estimates rotational or
 
 **Paper:** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-> **PyPI package:** KASALv2 **2.0.0** is packaged as [`kasal-6d`](https://pypi.org/project/kasal-6d/), continuing the classic 0.1.x releases with an integrated kasalv1 + KASALv2 desktop application. Future updates use this package name. Objaverse-SAD is currently being prepared and will be released in a future update.
+> **PyPI package:** KASALv2 **2.0.0** is available as [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/), continuing the classic 0.1.x package line with an integrated kasalv1 + KASALv2 desktop application. KASALv2 releases now use the `kasal-6d` package name. Objaverse-SAD is currently being prepared and will be released in a future update.
 
 ## Highlights
 
@@ -38,7 +38,7 @@ KASALv2 2.0.0 supports Python 3.10 and includes desktop dependencies by default.
 ```bash
 conda create -n kasalv2 python=3.10
 conda activate kasalv2
-python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/fa5f567a0aa7be862d00d5578f4a55a10449a6b1/requirements/torch-cpu.txt
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
 python -m pip install kasal-6d==2.0.0
 kasalv2 --help
 ```
@@ -112,7 +112,7 @@ On the 438 symmetric GSO objects reported in the paper, KASALv2 reaches **94.75%
 | Input | User-selected symmetry type and, when needed, order | No predefined type or order |
 | Main use | Review, correction, and forced X/Y/Z-axis fitting | Automatic annotation of new meshes and datasets |
 | Core stack | PyMeshLab-based preprocessing and key-axis templates | PyTorch3D, axis search, periodicity, and consistency analysis |
-| Distribution | Classic [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/); also retained in the integrated application | Integrated [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/) and source |
+| Distribution | Classic [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/); also retained in the integrated application | Integrated [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) and source |
 | Guide | [Classic kasalv1 guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/README_kasalv1.md) | This README |
 
 ## Interface

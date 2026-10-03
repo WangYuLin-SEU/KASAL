@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI 版本"></a>
-  <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/dm/kasal-6d?label=downloads" alt="PyPI 下载量"></a>
+  <a href="https://pepy.tech/projects/kasal-6d"><img src="https://api.pepy.tech/badge/kasal-6d" alt="PyPI 下载量"></a>
   <a href="https://github.com/WangYuLin-SEU/KASAL/releases/"><img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases 下载量"></a>
 </p>
 
@@ -20,7 +20,7 @@ KASALv2 无需预先指定对称类型，即可自动完成三维旋转对称分
 
 **论文：** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-> **PyPI 包名：** KASALv2 **2.0.0** 使用 [`kasal-6d`](https://pypi.org/project/kasal-6d/)，承接经典 0.1.x 版本，提供集成 kasalv1 + KASALv2 的桌面应用。后续更新沿用此包名。Objaverse-SAD 目前正在整理中，后续将正式发布。
+> **PyPI 包名：** KASALv2 **2.0.0** 已正式发布为 [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/)，承接经典 0.1.x 包版本线，提供集成 kasalv1 + KASALv2 的桌面应用。KASALv2 后续版本沿用 `kasal-6d` 包名。Objaverse-SAD 目前正在整理中，后续将正式发布。
 
 ## 主要特点
 
@@ -38,7 +38,7 @@ KASALv2 2.0.0 支持 Python 3.10，默认包含桌面依赖。先安装匹配的
 ```bash
 conda create -n kasalv2 python=3.10
 conda activate kasalv2
-python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/fa5f567a0aa7be862d00d5578f4a55a10449a6b1/requirements/torch-cpu.txt
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
 python -m pip install kasal-6d==2.0.0
 kasalv2 --help
 ```
@@ -112,7 +112,7 @@ KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以
 | 输入 | 用户选择对称类型，必要时指定阶数 | 无需预定义类型或阶数 |
 | 主要用途 | 复核、修正与强制 X/Y/Z 轴拟合 | 自动标注新网格和数据集 |
 | 核心实现 | PyMeshLab 预处理与主轴模板 | PyTorch3D、轴搜索、周期性与一致性分析 |
-| 发布方式 | 经典 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/)；集成应用也保留该流程 | 集成版 [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/) 及本仓库源码 |
+| 发布方式 | 经典 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/)；集成应用也保留该流程 | 集成版 [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) 及本仓库源码 |
 | 手册 | [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 本 README |
 
 ## 界面

@@ -14,7 +14,7 @@ For automatic analysis, current GUI behavior, and command-line batches, use the 
 
 | Distribution | Contents | License |
 |--------------|----------|---------|
-| Current source repository / `kasal-6d` 2.0.0 | Integrated kasalv1 + KASALv2 application | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| Current source repository / [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) | Integrated kasalv1 + KASALv2 application | [PolyForm Noncommercial 1.0.0](../LICENSE) |
 | Historical [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/) | Classic kasalv1 package | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
 Install the classic package with:

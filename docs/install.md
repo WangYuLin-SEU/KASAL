@@ -10,12 +10,12 @@ The integrated application is packaged as `kasal-6d` 2.0.0, continuing the class
 
 ## PyPI release
 
-The integrated **2.0.0** release targets the existing [`kasal-6d` PyPI project](https://pypi.org/project/kasal-6d/). Once published, create a clean Python 3.10 environment, install the matched CPU runtime, and then install the release:
+The integrated **2.0.0** release is available on the existing [`kasal-6d` PyPI project](https://pypi.org/project/kasal-6d/2.0.0/). Create a clean Python 3.10 environment, install the matched CPU runtime, and then install the release:
 
 ```bash
 conda create -n kasalv2 python=3.10
 conda activate kasalv2
-python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/fa5f567a0aa7be862d00d5578f4a55a10449a6b1/requirements/torch-cpu.txt
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
 python -m pip install --index-url https://pypi.org/simple/ kasal-6d==2.0.0
 python -m pip check
 python -c "import torch; from pytorch3d.ops import knn_points; x = torch.zeros(1, 4, 3); knn_points(x, x, K=1); print('OK torch', torch.__version__, '| PyTorch3D CPU operation')"
@@ -24,11 +24,11 @@ kasalv2 --help
 
 For a compatible NVIDIA/CUDA machine, replace `torch-cpu.txt` with `torch-gpu.txt` in a fresh environment. Do not replace PyTorch3D or mix CPU and CUDA builds. Windows CPU installation has been validated. CUDA and Linux users should use the matching profiles below and report environment-specific issues through the project issue tracker.
 
-The earlier standalone `kasalv2` 2.0.0 PyPI release and its `2.0.0rc1` TestPyPI build remain historical releases. Future updates use `kasal-6d`.
+The earlier standalone `kasalv2` distribution is retained only as a historical release. Current KASALv2 releases use `kasal-6d`.
 
 ### Upgrade an existing installation
 
-For classic `kasal-6d` 0.1.x users, first prepare a Python 3.10 environment with the matched PyTorch/PyTorch3D runtime above, then upgrade after publication:
+For classic `kasal-6d` 0.1.x users, first prepare a Python 3.10 environment with the matched PyTorch/PyTorch3D runtime above, then upgrade to 2.0.0:
 
 ```bash
 python -m pip install --upgrade "kasal-6d==2.0.0"

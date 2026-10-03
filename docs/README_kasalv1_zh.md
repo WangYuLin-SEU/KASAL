@@ -14,7 +14,7 @@
 
 | 发布物 | 内容 | 许可 |
 |--------|------|------|
-| 当前源码仓库 / `kasal-6d` 2.0.0 | 集成 kasalv1 + KASALv2 应用 | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| 当前源码仓库 / [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) | 集成 kasalv1 + KASALv2 应用 | [PolyForm Noncommercial 1.0.0](../LICENSE) |
 | 历史 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/) | 经典 kasalv1 包 | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
 安装经典包：

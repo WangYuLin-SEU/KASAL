@@ -10,12 +10,12 @@
 
 ## PyPI 正式版本
 
-集成版 **2.0.0** 将发布到原有的 [`kasal-6d` PyPI 项目](https://pypi.org/project/kasal-6d/)。发布后，新建干净的 Python 3.10 环境，先安装匹配的 CPU 运行依赖，再安装此版本：
+集成版 **2.0.0** 已正式发布到原有的 [`kasal-6d` PyPI 项目](https://pypi.org/project/kasal-6d/2.0.0/)。新建干净的 Python 3.10 环境，先安装匹配的 CPU 运行依赖，再安装此版本：
 
 ```bash
 conda create -n kasalv2 python=3.10
 conda activate kasalv2
-python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/fa5f567a0aa7be862d00d5578f4a55a10449a6b1/requirements/torch-cpu.txt
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
 python -m pip install --index-url https://pypi.org/simple/ kasal-6d==2.0.0
 python -m pip check
 python -c "import torch; from pytorch3d.ops import knn_points; x = torch.zeros(1, 4, 3); knn_points(x, x, K=1); print('OK torch', torch.__version__, '| PyTorch3D CPU operation')"
@@ -24,11 +24,11 @@ kasalv2 --help
 
 对于兼容的 NVIDIA/CUDA 机器，在新环境中将 `torch-cpu.txt` 换成 `torch-gpu.txt`。不要替换 PyTorch3D，也不要混装 CPU/CUDA 构建。Windows CPU 安装已完成验证；CUDA 与 Linux 用户请使用下文对应的安装剖面，如遇环境相关问题可通过项目 Issues 反馈。
 
-此前独立的 `kasalv2` 2.0.0 PyPI 版本及其 `2.0.0rc1` TestPyPI 构建保留为历史版本，后续更新使用 `kasal-6d`。
+此前独立的 `kasalv2` 包仅作为历史版本保留；当前 KASALv2 正式发布统一使用 `kasal-6d`。
 
 ### 升级已有安装
 
-经典 `kasal-6d` 0.1.x 用户先准备 Python 3.10 环境，并安装上述匹配的 PyTorch/PyTorch3D 运行依赖，待发布后升级：
+经典 `kasal-6d` 0.1.x 用户先准备 Python 3.10 环境，并安装上述匹配的 PyTorch/PyTorch3D 运行依赖，然后升级到 2.0.0：
 
 ```bash
 python -m pip install --upgrade "kasal-6d==2.0.0"
