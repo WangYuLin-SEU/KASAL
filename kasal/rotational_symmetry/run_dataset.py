@@ -121,9 +121,14 @@ def main() -> int:
     input_dir = args.input_dir.resolve()
     output_dir = args.output_dir.resolve()
 
-    all_meshes = sorted(input_dir.glob(args.pattern))
+    if not input_dir.is_dir():
+        print(f"[DATASET] error: Input directory does not exist or is not a directory: {input_dir}", file=sys.stderr)
+        return 1
+
+    all_meshes = sorted(path for path in input_dir.glob(args.pattern) if path.is_file())
     if not all_meshes:
-        raise FileNotFoundError(f"No meshes found in: {input_dir}")
+        print(f"[DATASET] error: No meshes found in: {input_dir} (pattern: {args.pattern})", file=sys.stderr)
+        return 1
 
     selected_meshes, selected_start, selected_count = select_chunk(
         all_meshes,
@@ -133,9 +138,11 @@ def main() -> int:
         chunk_size=args.chunk_size,
     )
     if not selected_meshes:
-        raise FileNotFoundError(
-            f"No selected meshes: start={selected_start}, count={selected_count}, total={len(all_meshes)}"
+        print(
+            f"[DATASET] error: No selected meshes: start={selected_start}, count={selected_count}, total={len(all_meshes)}",
+            file=sys.stderr,
         )
+        return 1
 
     started_at = time.time()
     summary = run_dataset_batch(

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kasal-6d"
-version = "2.0.0"
+version = "2.0.1rc3"
 description = "Automatic 3D rotational symmetry classification and axis localization"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
