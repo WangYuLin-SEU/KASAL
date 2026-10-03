@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <i>上方 PyPI 徽章对应当前 <b>kasalv1</b> 包；集成版 <b>KASALv2</b> PyPI 包即将上线</i>
+  <i>上方 PyPI 徽章对应当前 <b>kasalv1</b> 包；集成版 <b>KASALv2</b> 目前仅提供源码发布</i>
 </p>
 
 <div align="center">
@@ -50,10 +50,10 @@ python demo_shape_meshes.py              # 或 demo_texture_meshes.py
 
 集成版 **KASALv2** **尚未上架 PyPI**，请从本仓库源码安装（[PolyForm Noncommercial 1.0.0](LICENSE)）。经典 **kasalv1** PyPI 包（`pip install kasal-6d`，[Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)）可参考 [kasalv1 用户手册](docs/README_kasalv1_zh.md)。
 
-> **温馨提示**
+> **发布状态**
 >
-> - **PyPI：** 集成 **KASALv2** 的 PyPI 包（含 kasalv2 的 `kasal-6d`）**尚未发布**，预计 **约两周内**（2026 年 6 月中下旬）上线。当前请从源码安装 — [install_kasalv2_zh.md](docs/install_kasalv2_zh.md)。
-> - **Objaverse-SAD：** **约 3.5 万** Objaverse 物体旋转对称标注制作中，数据集预计 **约两周内**发布（Hugging Face 链接待定）。
+> - **PyPI：** 当前 `kasal-6d` 仍为经典 **kasalv1** 版本；集成 **KASALv2** 目前仅提供源码安装，尚未公布 PyPI 上线日期 — [install_kasalv2_zh.md](docs/install_kasalv2_zh.md)。
+> - **Objaverse-SAD：** **约 3.5 万** Objaverse 物体旋转对称标注仍在整理中；发布日期与 Hugging Face 链接待定。
 
 ### KASAL（kasalv1）用户手册
 
@@ -112,9 +112,9 @@ KASALv2 定位 **主高阶轴**，经自洽分析推断 **旋转阶数**，在�
 
 #### KASALv2 / 集成版
 
-- **2026 年 6 月** — CVPR 2026 论文；集成 GUI + kasalv2（源码安装）
-- **约 2026 年 6 月中下旬** *(计划)* — 含 kasalv2 的 PyPI 包
-- **约 2026 年 6 月中下旬** *(计划)* — **Objaverse-SAD**（约 3.5 万件）发布至 Hugging Face
+- **2026 年 6 月** — CVPR 2026 论文；集成 GUI + kasalv2 已在本仓库以源码形式发布
+- **当前状态** — 集成 KASALv2 仍仅提供源码安装；PyPI 上线日期尚未公布
+- **当前状态** — **Objaverse-SAD**（约 3.5 万件）仍在整理中；发布日期待定
 
 #### KASAL / kasalv1
 
@@ -129,7 +129,7 @@ KASALv2 定位 **主高阶轴**，经自洽分析推断 **旋转阶数**，在�
 * DSRSTO: https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset
 * GSO-SAD: https://huggingface.co/datasets/SEU-WYL/GSO-SAD
 * ShapeNet-SAD: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
-* **Objaverse-SAD（约 3.5 万）** — *即将发布*（预计 2026 年 6 月中下旬）
+* **Objaverse-SAD（约 3.5 万）** — *整理中*（发布日期 / Hugging Face 链接待定）
 
 详见 [kasalv1 — 数据集](docs/README_kasalv1_zh.md#datasets)。
 

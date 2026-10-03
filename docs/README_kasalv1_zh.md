@@ -64,7 +64,7 @@ KASAL 用于确定旋转对称物体的对称轴朝向与旋转中心。使用 K
 pip install kasal-6d
 ```
 
-（当前 PyPI 仍为 **kasalv1** 构建；集成 KASALv2 的 PyPI 包即将上线。）
+（当前 PyPI 仍为 **kasalv1** 构建；集成 **KASALv2** 目前仅提供源码安装，尚未上架 PyPI。）
 
 **许可：** 本 **KASALv2** 仓库适用 **[PolyForm Noncommercial 1.0.0](../LICENSE)**；独立 **kasalv1** PyPI 包（`pip install kasal-6d`）适用 **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**。
 

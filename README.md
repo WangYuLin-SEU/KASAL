@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <i>PyPI badge above reflects the current <b>kasalv1</b> package; integrated <b>KASALv2</b> PyPI release coming soon.</i>
+  <i>PyPI badge above reflects the current <b>kasalv1</b> package; integrated <b>KASALv2</b> is currently distributed from source only.</i>
 </p>
 
 <div align="center">
@@ -50,10 +50,10 @@ python demo_shape_meshes.py              # or demo_texture_meshes.py
 
 Integrated **KASALv2** is **not on PyPI yet** — install from this repo ([PolyForm Noncommercial 1.0.0](LICENSE)). Classic **kasalv1** on PyPI (`pip install kasal-6d`, [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)) → [kasalv1 user guide](docs/README_kasalv1.md).
 
-> **Notice**
+> **Release status**
 >
-> - **PyPI:** The integrated **KASALv2** release on PyPI (`kasal-6d` with kasalv2) is **not yet available**. Expected within **~2 weeks** (mid-June 2026). For now, install from source — [install_kasalv2.md](docs/install_kasalv2.md).
-> - **Objaverse-SAD:** Rotational-symmetry annotations for **~35,000 Objaverse** objects are in preparation; dataset release expected within **~2 weeks** (Hugging Face link TBD).
+> - **PyPI:** The current `kasal-6d` package is the classic **kasalv1** release. Integrated **KASALv2** is currently source-only; no PyPI release date is announced. Install from source — [install_kasalv2.md](docs/install_kasalv2.md).
+> - **Objaverse-SAD:** Rotational-symmetry annotations for **~35,000 Objaverse** objects are still in preparation; the release date and Hugging Face link are TBD.
 
 ### KASAL (kasalv1) User Guide
 
@@ -112,9 +112,9 @@ Rotational symmetry is an important prior in **6D pose estimation** and symmetry
 
 #### KASALv2 / integrated release
 
-- **Jun 2026** — CVPR 2026 paper (Open Access); integrated GUI + kasalv2 (source install)
-- **~Mid Jun 2026** *(planned)* — PyPI package with kasalv2
-- **~Mid Jun 2026** *(planned)* — **Objaverse-SAD** (~35k objects) on Hugging Face
+- **Jun 2026** — CVPR 2026 paper (Open Access); integrated GUI + kasalv2 released in this repository (source install)
+- **Current status** — Integrated KASALv2 remains source-only; PyPI release date not announced
+- **Current status** — **Objaverse-SAD** (~35k objects) remains in preparation; release date TBD
 
 #### KASAL / kasalv1
 
@@ -129,7 +129,7 @@ Rotational symmetry is an important prior in **6D pose estimation** and symmetry
 * DSRSTO: https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset
 * GSO-SAD: https://huggingface.co/datasets/SEU-WYL/GSO-SAD
 * ShapeNet-SAD: https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD
-* **Objaverse-SAD (~35k)** — *Coming soon* (expected mid-June 2026)
+* **Objaverse-SAD (~35k)** — *In preparation* (release date / Hugging Face link TBD)
 
 Classic dataset descriptions: [kasalv1 — Datasets](docs/README_kasalv1.md#datasets).
 

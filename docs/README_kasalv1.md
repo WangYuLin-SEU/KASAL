@@ -60,7 +60,7 @@ Below are the links to these three datasets:
 
 * **Install via PyPI (kasalv1 package)**
 
-KASAL is available on **PyPI** (currently the **kasalv1** build; integrated KASALv2 PyPI coming soon):
+KASAL is available on **PyPI** as the classic **kasalv1** build. Integrated **KASALv2** is currently source-only and is not yet available on PyPI:
 
 ```
 pip install kasal-6d
