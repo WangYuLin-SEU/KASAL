@@ -1,4 +1,8 @@
+import importlib.util
 import json
+import sys
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -7,7 +11,28 @@ from kasal.utils.io_json import write_json
 
 
 def test_non_rotational_analysis_exports_empty_axes(monkeypatch, tmp_path):
-    import kasal.rotational_symmetry.analyzer as analyzer
+    # The classifier is replaced below; its unused search dependencies need no runtime.
+    def unused_search(*args, **kwargs):
+        raise AssertionError("Non-rotational result assembly must not run axis search")
+
+    for name, functions in {
+        "axis_search": ["search_primary_axis", "search_secondary_axis_at_angle"],
+        "consistency": ["geom_pi_axis_consistency_ok"],
+        "geometry": ["compute_axis_rotation_loss", "generate_symmetry_transforms",
+                     "get_template_axis_angle", "normalize_vector"],
+        "periodicity": ["estimate_axis_periodicity"],
+    }.items():
+        module = ModuleType(f"kasal.rotational_symmetry.{name}")
+        for function in functions:
+            setattr(module, function, unused_search)
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setitem(sys.modules, "torch", None)
+
+    # Load the real analyzer separately so temporary dependency stubs cannot leak.
+    source = Path(__file__).resolve().parents[1] / "kasal/rotational_symmetry/analyzer.py"
+    spec = importlib.util.spec_from_file_location("kasal.rotational_symmetry._test_analyzer", source)
+    analyzer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(analyzer)
 
     center = [1.0, 2.0, 3.0]
     monkeypatch.setattr(
