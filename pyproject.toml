@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kasal-6d"
+version = "2.0.0"
+description = "Automatic 3D rotational symmetry classification and axis localization"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+license = "PolyForm-Noncommercial-1.0.0 AND MIT"
+license-files = ["LICENSE", "kasal/bop_toolkit_lib/LICENSE.txt"]
+authors = [
+    {name = "Yulin Wang", email = "yulinwang@seu.edu.cn"},
+    {name = "Mengxin Zhang", email = "mx.zhang@seu.edu.cn"},
+]
+maintainers = [
+    {name = "Hu Mengting", email = "220240361@seu.edu.cn"},
+]
+keywords = ["3d", "rotational-symmetry", "mesh", "pose-estimation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+# Keep the published 0.1.x extra; desktop dependencies are now included by default.
+recommended = []
+
+[project.urls]
+Homepage = "https://github.com/WangYuLin-SEU/KASAL"
+Documentation = "https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md"
+Issues = "https://github.com/WangYuLin-SEU/KASAL/issues"
+
+[project.scripts]
+kasalv2 = "kasal.cli.launch:main"
+kasalv2-job = "kasal.cli.run_job:main"
+kasalv2-dataset = "kasal.rotational_symmetry.run_dataset:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["kasal", "kasal.*"]
+namespaces = false
+
+[tool.setuptools.dynamic]
+# Torch/PyTorch3D use external indexes and must be installed separately for CPU or CUDA.
+dependencies = {file = ["requirements/base.txt", "requirements/gui.txt"]}
+
+[tool.setuptools.package-data]
+kasal = ["jobs/*.json"]
+"kasal.datasets" = [
+    "arrow.ply", "arrow_xyz.ply", "K4.ico", "K4.png",
+    "shape_meshes/*.ply",
+    "texture_meshes/*.obj", "texture_meshes/*.mtl", "texture_meshes/*.jpg",
+]
+"kasal.bop_toolkit_lib" = ["LICENSE.txt"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*_sym.ply", "*_sym_type.json"]

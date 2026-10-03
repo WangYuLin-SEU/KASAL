@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="kasal/datasets/kasal_icon.png" alt="KASAL" width="75%">
+  <img src="https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/kasalv2/kasal/datasets/kasal_icon.png" alt="KASAL" width="75%">
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/v/kasal-6d" alt="PyPI Version"></a>
-  <a href="https://pepy.tech/project/kasal-6d"><img src="https://static.pepy.tech/badge/kasal-6d" alt="Downloads"></a>
+  <a href="https://pypi.org/project/kasal-6d/"><img src="https://img.shields.io/pypi/dm/kasal-6d?label=downloads" alt="PyPI Downloads"></a>
   <a href="https://github.com/WangYuLin-SEU/KASAL/releases/"><img src="https://img.shields.io/github/downloads/WangYuLin-SEU/KASAL/total?color=green" alt="GitHub Releases Downloads"></a>
 </p>
 
 <div align="center">
 
-**English** | [中文](README_zh.md) · [Install](docs/install.md) | [安装](docs/install_zh.md)
+**English** | [中文](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/README_zh.md) · [Install](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md) | [安装](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install_zh.md)
 
 </div>
 
@@ -20,7 +20,7 @@ KASALv2 automatically classifies 3D rotational symmetry, estimates rotational or
 
 **Paper:** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-> **Release status (checked 2026-10-02):** the integrated KASALv2 code is distributed from this repository and is not part of the current [`kasal-6d` PyPI package](https://pypi.org/project/kasal-6d/), which remains the classic kasalv1 release. Objaverse-SAD is not yet listed on the official [SEU-WYL Hugging Face profile](https://huggingface.co/SEU-WYL).
+> **PyPI package:** KASALv2 **2.0.0** is packaged as [`kasal-6d`](https://pypi.org/project/kasal-6d/), continuing the classic 0.1.x releases with an integrated kasalv1 + KASALv2 desktop application. Future updates use this package name. Objaverse-SAD is currently being prepared and will be released in a future update.
 
 ## Highlights
 
@@ -32,6 +32,20 @@ KASALv2 automatically classifies 3D rotational symmetry, estimates rotational or
 - BOP-compatible symmetry payloads for downstream 6D pose-estimation workflows
 
 ## Quick start
+
+KASALv2 2.0.0 supports Python 3.10 and includes desktop dependencies by default. Install the matched PyTorch/PyTorch3D runtime first, then install KASALv2 from PyPI. CPU example:
+
+```bash
+conda create -n kasalv2 python=3.10
+conda activate kasalv2
+python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/fa5f567a0aa7be862d00d5578f4a55a10449a6b1/requirements/torch-cpu.txt
+python -m pip install kasal-6d==2.0.0
+kasalv2 --help
+```
+
+For CUDA, use the matching `torch-gpu.txt` profile in a fresh environment. See the [installation guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md#pypi-release) for details. If migrating from the standalone `kasalv2` package in the same environment, uninstall it before installing `kasal-6d`: both distributions use the `kasal` import directory.
+
+To run from source:
 
 Python 3.10 and conda are recommended. Choose `full-gpu` only for a compatible NVIDIA/CUDA system.
 
@@ -45,7 +59,7 @@ python scripts/verify_pytorch3d.py
 python demo_shape_meshes.py
 ```
 
-For texture-aware examples, run `python demo_texture_meshes.py`. See the [installation guide](docs/install.md) for GPU, Linux, headless, and troubleshooting instructions.
+For texture-aware examples, run `python demo_texture_meshes.py`. See the [installation guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md) for GPU, Linux, headless, and troubleshooting instructions.
 
 ## Choose a workflow
 
@@ -55,7 +69,7 @@ For texture-aware examples, run `python demo_texture_meshes.py`. See the [instal
 | Analyze textured examples in the GUI | `python demo_texture_meshes.py` | The same sidecar files, with texture-aware analysis enabled from the UI |
 | Run GUI-equivalent jobs without Polyscope | `python -m kasal.cli.run_job kasal/jobs/example_job.json` | Sidecar files beside each source mesh |
 | Process a flat dataset into a separate output tree | `python -m kasal.rotational_symmetry.run_dataset --input-dir INPUT --output-dir OUTPUT` | Per-object BOP-style JSON plus batch JSON/CSV summaries |
-| Use the classic manual kasalv1 workflow | Select a type/order in the integrated GUI, or install `kasal-6d` | User-guided axis localization |
+| Use the classic manual kasalv1 workflow | Select a type/order in the integrated GUI, or install `kasal-6d==0.1.4` for the original application | User-guided axis localization |
 
 The GUI recursively discovers `.ply` and `.obj` files and ignores generated `*_sym.ply` files. The KASALv2 loader can also read `.glb`, `.gltf`, `.stl`, and `.off` when those files are supplied explicitly through a job or a matching dataset-runner pattern.
 
@@ -98,29 +112,29 @@ On the 438 symmetric GSO objects reported in the paper, KASALv2 reaches **94.75%
 | Input | User-selected symmetry type and, when needed, order | No predefined type or order |
 | Main use | Review, correction, and forced X/Y/Z-axis fitting | Automatic annotation of new meshes and datasets |
 | Core stack | PyMeshLab-based preprocessing and key-axis templates | PyTorch3D, axis search, periodicity, and consistency analysis |
-| Distribution | [`kasal-6d` on PyPI](https://pypi.org/project/kasal-6d/) | Source from this repository |
-| Guide | [Classic kasalv1 guide](docs/README_kasalv1.md) | This README |
+| Distribution | Classic [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/); also retained in the integrated application | Integrated [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/) and source |
+| Guide | [Classic kasalv1 guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/README_kasalv1.md) | This README |
 
 ## Interface
 
 The **Setup** page selects the dataset folder, interface language, preprocessing policy, and compute device.
 
 <p align="center">
-  <img src="kasal/datasets/v2-1-en.png" alt="KASALv2 Setup page" width="720">
+  <img src="https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/kasalv2/kasal/datasets/v2-1-en.png" alt="KASALv2 Setup page" width="720">
 </p>
 
 After confirmation, the **KASAL** page provides object navigation, annotation controls, engine selection, single-object computation, and incremental batch computation.
 
 <p align="center">
-  <img src="kasal/datasets/v2-2-en.png" alt="KASALv2 main page" width="720">
+  <img src="https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/kasalv2/kasal/datasets/v2-2-en.png" alt="KASALv2 main page" width="720">
 </p>
 
 ## Guides
 
 | Document | Purpose |
 |----------|---------|
-| [Installation](docs/install.md) | Dependency profiles, CPU/GPU setup, Linux packages, and troubleshooting |
-| [Classic kasalv1 guide](docs/README_kasalv1.md) | Manual symmetry-type workflow retained for existing users |
+| [Installation](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md) | Dependency profiles, CPU/GPU setup, Linux packages, and troubleshooting |
+| [Classic kasalv1 guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/README_kasalv1.md) | Manual symmetry-type workflow retained for existing users |
 
 ## Source layout
 
@@ -135,20 +149,20 @@ After confirmation, the **KASAL** page provides object navigation, annotation co
 | `kasal/geometry/`, `kasal/viz/` | Shared geometry processing and visualization export |
 | `kasal/utils/`, `kasal/datasets/` | General utilities, sample meshes, and resource paths |
 
-Python modules and functions use `snake_case`; classes use `PascalCase`. Application entry points call `compute`, while algorithm modules perform analysis. General JSON I/O lives in `utils/io_json.py` and does not depend on annotation or GUI state. Call implementations directly with named parameters or typed configuration objects; do not add forwarding wrappers or `*args`/`**kwargs` adapters. Algorithm overrides are passed through `config=...`; the dataset runner resolves the device and FPS override before constructing its analysis config.
+The codebase separates application entry points, shared runtime state, annotation I/O, geometry utilities, and the KASALv1/KASALv2 algorithm modules. Algorithm parameters are centralized in `kasal/config/algorithms.py`, while mutable GUI/runtime state lives in `kasal/config/runtime.py`.
 
 ## Datasets
 
 - [DSRSTO](https://huggingface.co/datasets/SEU-WYL/DSRSTO-dataset)
 - [GSO-SAD](https://huggingface.co/datasets/SEU-WYL/GSO-SAD)
 - [ShapeNet-SAD](https://huggingface.co/datasets/SEU-WYL/ShapeNet-SAD)
-- **Objaverse-SAD (~35,000 objects):** in preparation; no public download link has been announced as of 2026-10-02
+- **Objaverse-SAD (~35,000 objects):** in preparation and planned for a future release
 
 ## License
 
-This repository, including the integrated KASALv2 source release, is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use is not permitted by this license; contact Yulin Wang ([yulinwang@seu.edu.cn](mailto:yulinwang@seu.edu.cn)) for licensing questions.
+This repository, including the integrated KASALv2 source release, is licensed under the [PolyForm Noncommercial License 1.0.0](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/LICENSE). Commercial use is not permitted by this license; contact Yulin Wang ([yulinwang@seu.edu.cn](mailto:yulinwang@seu.edu.cn)) for licensing questions.
 
-The separately distributed classic `kasal-6d` PyPI package is licensed under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+The historical classic `kasal-6d` 0.1.x releases remain licensed under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The integrated 2.0.0 release uses the current repository license; bundled third-party code retains its own license notices.
 
 ## Citation
 

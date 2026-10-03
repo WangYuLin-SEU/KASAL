@@ -14,16 +14,16 @@ For automatic analysis, current GUI behavior, and command-line batches, use the 
 
 | Distribution | Contents | License |
 |--------------|----------|---------|
-| Current source repository | Integrated kasalv1 + KASALv2 application | [PolyForm Noncommercial 1.0.0](../LICENSE) |
-| [`kasal-6d` on PyPI](https://pypi.org/project/kasal-6d/) | Classic kasalv1 package | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Current source repository / `kasal-6d` 2.0.0 | Integrated kasalv1 + KASALv2 application | [PolyForm Noncommercial 1.0.0](../LICENSE) |
+| Historical [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/) | Classic kasalv1 package | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
 
 Install the classic package with:
 
 ```bash
-pip install kasal-6d
+pip install kasal-6d==0.1.4
 ```
 
-To run the integrated source application instead, follow [Install KASALv2 from source](install.md).
+For the integrated application from PyPI or source, follow [Install KASALv2](install.md).
 
 ## Start the integrated GUI
 
@@ -123,7 +123,7 @@ In the integrated application, **Cal All (unsaved)** processes only objects with
 
 For repeatable non-interactive execution, use `python -m kasal.cli.run_job JOB.json`. It accepts the same manual fields through `defaults.sym_type`, `defaults.n_fold`, and `defaults.axis_xyz`.
 
-The separately distributed PyPI package preserves the classic kasalv1 application described on its [PyPI project page](https://pypi.org/project/kasal-6d/); its interface can differ from the integrated source application.
+The historical 0.1.x releases preserve the classic kasalv1 application described on the [0.1.4 project page](https://pypi.org/project/kasal-6d/0.1.4/); their interface can differ from the integrated 2.0.0 application.
 
 <a id="datasets"></a>
 

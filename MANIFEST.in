@@ -1,0 +1,10 @@
+include README.md README_zh.md requirements.txt
+include demo_shape_meshes.py demo_texture_meshes.py
+recursive-include requirements *.txt *.md
+recursive-include scripts *.py
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include kasal/datasets *.png *.ico *.ply *.obj *.mtl *.jpg
+recursive-include kasal/jobs *.json
+prune .local
+global-exclude *.py[cod] *_sym.ply *_sym_type.json
