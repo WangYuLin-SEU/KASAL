@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="/kasal/datasets/icon_md.png" alt="">
+  <img src="https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/kasalv2/kasal/datasets/kasal_icon.png" alt="KASAL" width="75%">
 </p>
 
 <p align="center">
@@ -61,6 +61,13 @@ If you want to install KASAL manually, use the following commands:
     conda activate kasal
     pip install -r requirements.txt # Only needed for manual installation
 ``````
+> **⚠️Note**:  
+> If you encounter compatibility issues with the default installation, you can install our recommended environment with:
+> ```
+>     pip install kasal-6d[recommended]
+>     # or
+>     pip install -r requirements_recommended.txt 
+> ```
 * **Quick Start**
 
 After installation, you can quickly test KASAL by running the following demo scripts:
