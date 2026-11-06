@@ -10,7 +10,7 @@
 
 <div align="center">
 
-[English](README.md) | **中文** · [Install](docs/install.md) | [安装](docs/install_zh.md)
+[English](README.md) | **中文** · [安装](docs/install_zh.md)
 
 # KASAL：三维旋转对称分类与对称轴定位
 
@@ -18,11 +18,9 @@ KASAL 系列结合三维几何与纹理分析旋转对称。**kasalv1** 在已�
 
 **论文：** [kasalv1 · TIP 2024](https://doi.org/10.1109/TIP.2024.3515801) · [KASALv2 · CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-**[网站源码](docs/site/)** · [快速开始](#快速开始) · [使用方式](#选择使用方式) · [界面](#界面) · [指南](#指南) · [引用](#引用)
+[快速开始](#快速开始) · [使用方式](#选择使用方式) · [界面](#界面) · [指南](#指南) · [引用](#引用)
 
 </div>
-
-双语网站源码位于 [`docs/site/`](docs/site/)。克隆或下载仓库后，用浏览器打开 `docs/site/index.html` 即可离线浏览。目前尚未启用 GitHub Pages。
 
 > **PyPI 包名：** KASALv2 **2.0.0** 已正式发布为 [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/)，承接经典 0.1.x 包版本线，提供集成 kasalv1 + KASALv2 的桌面应用。KASALv2 后续版本沿用 `kasal-6d` 包名，当前源码版本为 **2.0.1rc3**。Objaverse-SAD 目前正在整理中，后续将正式发布。
 
@@ -143,7 +141,7 @@ KASALv2 用 **几何退化层次结构（GDH）** 描述八类典型对称及其
 |------|------|
 | [安装指南](docs/install_zh.md) | 依赖组合、CPU/GPU、Linux 系统包与故障排查 |
 | [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 为现有用户保留的已知对称类型流程 |
-| [网站源码](docs/site/) | KASAL 系列、方法、结果与软件的双语介绍；在本地打开 `index.html` 浏览 |
+| [网站源码](docs/site/) | KASAL 系列、方法、结果与软件的双语介绍 |
 
 ## 源码结构
 

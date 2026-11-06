@@ -10,7 +10,7 @@
 
 <div align="center">
 
-**English** | [中文](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/README_zh.md) · [Install](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md) | [安装](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install_zh.md)
+**English** | [中文](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/README_zh.md) · [Install](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md)
 
 # KASAL: 3D Rotational Symmetry Classification and Axis Localization
 
@@ -18,11 +18,9 @@ The KASAL series analyzes rotational symmetry from 3D geometry and texture. **ka
 
 **Papers:** [kasalv1 · TIP 2024](https://doi.org/10.1109/TIP.2024.3515801) · [KASALv2 · CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
 
-**[Website source](docs/site/)** · [Quick start](#quick-start) · [Workflows](#choose-a-workflow) · [Interface](#interface) · [Guides](#guides) · [Citation](#citation)
+[Quick start](#quick-start) · [Workflows](#choose-a-workflow) · [Interface](#interface) · [Guides](#guides) · [Citation](#citation)
 
 </div>
-
-The bilingual website source is in [`docs/site/`](docs/site/). After cloning or downloading the repository, open `docs/site/index.html` in a browser to view it offline. GitHub Pages is not enabled.
 
 > **PyPI package:** KASALv2 **2.0.0** is available as [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/), continuing the classic 0.1.x package line with an integrated kasalv1 + KASALv2 desktop application. KASALv2 releases now use the `kasal-6d` package name; the source tree is at **2.0.1rc3**. Objaverse-SAD is currently being prepared and will be released in a future update.
 
@@ -143,7 +141,7 @@ After confirmation, the **KASAL** page provides object navigation, annotation co
 |----------|---------|
 | [Installation](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/install.md) | Dependency profiles, CPU/GPU setup, Linux packages, and troubleshooting |
 | [Classic kasalv1 guide](https://github.com/WangYuLin-SEU/KASAL/blob/kasalv2/docs/README_kasalv1.md) | Known-type symmetry workflow retained for existing users |
-| [Website source](docs/site/) | Bilingual overview of the KASAL series, methods, results, and software; open `index.html` locally |
+| [Website source](docs/site/) | Bilingual overview of the KASAL series, methods, results, and software |
 
 ## Source layout
 
