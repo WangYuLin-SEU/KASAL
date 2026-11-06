@@ -12,15 +12,19 @@
 
 [English](README.md) | **中文** · [Install](docs/install.md) | [安装](docs/install_zh.md)
 
+# KASAL：三维旋转对称分类与对称轴定位
+
+KASAL 系列结合三维几何与纹理分析旋转对称。**kasalv1** 在已知对称类型和阶数时自动计算完整轴系；**KASALv2** 则自动推断类型、阶数与对称轴。两套流程集成在同一桌面应用中。
+
+**论文：** [kasalv1 · TIP 2024](https://doi.org/10.1109/TIP.2024.3515801) · [KASALv2 · CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
+
+**[网站源码](docs/site/)** · [快速开始](#快速开始) · [使用方式](#选择使用方式) · [界面](#界面) · [指南](#指南) · [引用](#引用)
+
 </div>
 
-# KASALv2：全自动三维旋转对称分类与对称轴定位
+双语网站源码位于 [`docs/site/`](docs/site/)。克隆或下载仓库后，用浏览器打开 `docs/site/index.html` 即可离线浏览。目前尚未启用 GitHub Pages。
 
-KASALv2 无需预先指定对称类型，即可自动完成三维旋转对称分类、阶数识别与完整对称轴定位。本仓库也在同一桌面应用中保留了原版 **kasalv1** 用户引导流程。
-
-**论文：** [CVPR 2026 Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.html) · [PDF](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhang_KASALv2_Fully_Automatic_3D_Rotational_Symmetry_Classification_and_Axis_Localization_CVPR_2026_paper.pdf)
-
-> **PyPI 包名：** KASALv2 **2.0.0** 已正式发布为 [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/)，承接经典 0.1.x 包版本线，提供集成 kasalv1 + KASALv2 的桌面应用。KASALv2 后续版本沿用 `kasal-6d` 包名。Objaverse-SAD 目前正在整理中，后续将正式发布。
+> **PyPI 包名：** KASALv2 **2.0.0** 已正式发布为 [`kasal-6d`](https://pypi.org/project/kasal-6d/2.0.0/)，承接经典 0.1.x 包版本线，提供集成 kasalv1 + KASALv2 的桌面应用。KASALv2 后续版本沿用 `kasal-6d` 包名，当前源码版本为 **2.0.1rc3**。Objaverse-SAD 目前正在整理中，后续将正式发布。
 
 ## 主要特点
 
@@ -41,6 +45,7 @@ conda activate kasalv2
 python -m pip install -r https://raw.githubusercontent.com/WangYuLin-SEU/KASAL/3dba824747530bc6296b84b1d5ba6fa172610a18/requirements/torch-cpu.txt
 python -m pip install kasal-6d==2.0.0
 kasalv2 --help
+kasalv2 "PATH_TO_YOUR_MESH_DIRECTORY"
 ```
 
 CUDA 环境请在新环境中使用匹配的 `torch-gpu.txt`，详见[安装说明](docs/install_zh.md#pypi-正式版本)。如果在同一环境中从独立的 `kasalv2` 包迁移，请先卸载它再安装 `kasal-6d`，因为两者使用相同的 `kasal` 导入目录。
@@ -69,7 +74,7 @@ python demo_shape_meshes.py
 | 在 GUI 中分析纹理示例 | `python demo_texture_meshes.py` | 相同 sidecar 文件；在界面中启用纹理感知分析 |
 | 不启动 Polyscope，执行与 GUI 相同的任务 | `python -m kasal.cli.run_job kasal/jobs/example_job.json` | 写在源网格旁的 sidecar 文件 |
 | 将平铺数据集处理到独立输出目录 | `python -m kasal.rotational_symmetry.run_dataset --input-dir INPUT --output-dir OUTPUT` | 逐对象 BOP 风格 JSON，以及批量 JSON/CSV 汇总 |
-| 使用经典 kasalv1 手动流程 | 在集成 GUI 中选择类型/阶数；原版应用使用 `kasal-6d==0.1.4` | 用户引导的对称轴定位 |
+| 使用经典 kasalv1 用户引导流程 | 在集成 GUI 中选择类型/阶数；原版应用使用 `kasal-6d==0.1.4` | 根据给定的类型/阶数自动计算对称轴 |
 
 GUI 会递归发现目录内的 `.ply` 和 `.obj`，并忽略生成的 `*_sym.ply`。如果通过任务列表或数据集运行器的匹配模式显式传入文件，KASALv2 加载器还支持 `.glb`、`.gltf`、`.stl` 和 `.off`。
 
@@ -77,8 +82,9 @@ GUI 会递归发现目录内的 `.ply` 和 `.obj`，并忽略生成的 `*_sym.pl
 
 在 **Setup（设置）**页选择数据集目录、预处理策略和计算设备，然后点击**确认**。处理新数据集时通常保持使用 **kasalv2**。
 
-- 未标注对象使用 kasalv2 自动分析。
-- 用户修改过对称类型/阶数，或指定 X/Y/Z 拟合时使用 kasalv1。
+- 未标注且类型/阶数未经编辑的对象，无论引擎下拉框选项为何，都使用 kasalv2 自动分析。
+- 修改对称类型或阶数，或指定 X/Y/Z 拟合时，计算转由 kasalv1 执行。指定 X/Y/Z 拟合还需要明确的对称类型。
+- 命令行任务若提供了已知对称类型，需显式将引擎设为 `kasalv1`。两套引擎都会自动计算对称轴。
 - 桌面环境推荐 `kasalv2_adaptive`；没有 PyMeshLab 的无头环境使用 `kasalv2_strict`。
 - **批量计算（仅未保存）**只处理尚无保存结果或加载后被编辑的对象。
 - 每个完成对象会在源网格旁写入 `{stem}_sym_type.json`，适用时还会写入 `{stem}_sym.ply`。
@@ -101,17 +107,19 @@ python -m kasal.rotational_symmetry.run_dataset --help
   -> 导出兼容 BOP 的对称数据
 ```
 
-KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以层级引导方式重建完整对称结构。纹理分析以独立层保存，外观造成的阶数变化不会覆盖几何结果。
+KASALv2 用 **几何退化层次结构（GDH）** 描述八类典型对称及其相互关系。它首先定位主高阶轴，通过自洽分析推断旋转阶数，再依据这一层次结构确定对称类型并恢复完整轴系。纹理分析以独立层保存，外观造成的阶数变化不会覆盖几何结果。
 
-论文在 GSO 的 438 件对称物体上报告了 **94.75%** 的分类准确率；将估计的对称先验用于 FoundationPose 训练时，在五个 BOP 数据集上最高提升 **0.9%**。
+论文在 438 个 GSO 对称物体上报告了 **94.75% 的类型与阶数联合准确率**。将其对称先验用于 FoundationPose 后，五个 BOP 数据集中最大的平均提升为 **IC-BIN 上的 0.9 个百分点**。这些位姿估计结果取同一次训练的五个检查点的均值。
 
 ## kasalv1 与 KASALv2
+
+已知对称类型和阶数时，kasalv1 用少量关键轴确定完整轴系。其轴定位研究涵盖七类非球对称，几何定位使用 **ADI**，结合纹理时使用 **ADI-C**。KASALv2 在此基础上进一步自动推断类型和阶数。
 
 | | kasalv1 | KASALv2 |
 |---|---|---|
 | 输入 | 用户选择对称类型，必要时指定阶数 | 无需预定义类型或阶数 |
-| 主要用途 | 复核、修正与强制 X/Y/Z 轴拟合 | 自动标注新网格和数据集 |
-| 核心实现 | PyMeshLab 预处理与主轴模板 | PyTorch3D、轴搜索、周期性与一致性分析 |
+| 主要用途 | 已知类型/阶数时的轴定位、复核、修正与强制 X/Y/Z 轴拟合 | 自动标注新网格和数据集 |
+| 核心实现 | PyMeshLab 预处理、关键轴模板、ADI 与 ADI-C | PyTorch3D、GDH 引导的轴搜索、周期性与一致性分析 |
 | 发布方式 | 经典 [`kasal-6d` 0.1.x](https://pypi.org/project/kasal-6d/0.1.4/)；集成应用也保留该流程 | 集成版 [`kasal-6d` 2.0.0](https://pypi.org/project/kasal-6d/2.0.0/) 及本仓库源码 |
 | 手册 | [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 本 README |
 
@@ -134,7 +142,8 @@ KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以
 | 文档 | 内容 |
 |------|------|
 | [安装指南](docs/install_zh.md) | 依赖组合、CPU/GPU、Linux 系统包与故障排查 |
-| [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 为现有用户保留的手动对称类型流程 |
+| [经典 kasalv1 手册](docs/README_kasalv1_zh.md) | 为现有用户保留的已知对称类型流程 |
+| [网站源码](docs/site/) | KASAL 系列、方法、结果与软件的双语介绍；在本地打开 `index.html` 浏览 |
 
 ## 源码结构
 
@@ -148,6 +157,7 @@ KASALv2 首先定位主高阶轴，通过自洽分析推断旋转阶数，再以
 | `kasal/rotational_symmetry/` | KASALv2 自动分析与独立数据集运行器 |
 | `kasal/geometry/`、`kasal/viz/` | 共用几何处理与可视化导出 |
 | `kasal/utils/`、`kasal/datasets/` | 通用工具、示例模型和资源路径 |
+| `docs/site/` | 包含 `index.html` 和本地资源的双语静态网站 |
 
 代码结构将应用入口、运行状态、标注读写、几何工具以及 KASALv1/KASALv2 算法模块分离。算法参数集中在 `kasal/config/algorithms.py`，可变的 GUI 与运行时状态集中在 `kasal/config/runtime.py`。
 
