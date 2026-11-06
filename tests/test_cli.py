@@ -30,6 +30,7 @@ def test_job_computes_exports_and_skips_saved_models(tmp_path, capsys):
         assert tree.query(transformed)[0].max() < .05
     exported = inout.load_ply(visualization)
     assert len(exported['pts']) > len(mesh.vertices) and np.isfinite(exported['pts']).all()
+    assert len(np.unique(exported['colors'][:len(mesh.vertices)], axis=0)) == 4
 
     before = annotation.read_bytes(), visualization.read_bytes()
     capsys.readouterr()

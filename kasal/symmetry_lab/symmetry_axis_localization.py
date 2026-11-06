@@ -12,7 +12,6 @@
 import fpsample
 import numpy as np
 import trimesh
-from scipy import spatial
 
 from kasal.symmetry_lab.symmetry_axis_template import clear_symmetry_fields
 from kasal.config.algorithms import DEFAULT_KASALV1_CONFIG, KasalV1Config
@@ -230,29 +229,8 @@ def localize_symmetry_axes(
             symmetries_discrete.append(transform.reshape((16)))
             orbit_transforms.append(transform)
         symmetries_discrete = np.array(symmetries_discrete)
-        distinct_orbit_found = 0
-        for i in range(config.orbit_probe_attempts):
-            reference_point = np.random.uniform(0,1,3)
-            orbit_points = []
-            for transform in orbit_transforms:
-                transformed_reference = np.dot(transform[:3, :3], reference_point) + transform[:3, 3]
-                orbit_points.append(transformed_reference)
-            orbit_points = np.array(orbit_points)
-            distances = spatial.distance.cdist(orbit_points, orbit_points, metric='euclidean').reshape((-1))
-            zero_distances = distances[distances == 0]
-            if zero_distances.shape[0] == orbit_points.shape[0]:
-                distinct_orbit_found = 1
-                break
-        if distinct_orbit_found == 0:
-            raise ValueError("Could not find distinct points for the symmetry orbit.")
         if color_symmetry_orbits:
-            orbit_colors = np.random.randint(0, 255, (len(orbit_transforms), 3)).astype('int')
-            apply_symmetry_orbit_colors(
-                model,
-                orbit_transforms,
-                reference_point=reference_point,
-                orbit_colors=orbit_colors,
-            )
+            apply_symmetry_orbit_colors(model, orbit_transforms)
         _apply_model_bounds(model)
         model[symmetry_operation] = symmetries_discrete.tolist()
 

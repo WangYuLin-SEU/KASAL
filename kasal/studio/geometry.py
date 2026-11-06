@@ -1,6 +1,49 @@
 """Read scalar attributes without changing vertex order or source geometry."""
 from __future__ import annotations
+from functools import lru_cache
 import numpy as np
+import trimesh
+from kasal.viz.symmetry_visual_export import symmetry_palette, symmetry_region_labels
+
+
+@lru_cache(maxsize=1)
+def _export_arrow_topology():
+    from kasal.bop_toolkit_lib.inout import load_ply
+    from kasal.datasets.paths import arrow_path
+    arrow = load_ply(arrow_path)
+    return len(arrow['pts']), np.asarray(arrow['faces'], dtype=np.int64)
+
+
+def result_surface(mesh, *, separate_axes=False, symmetry=None):
+    """Style an in-memory result; recompute regions from saved symmetry transforms.
+
+    The legacy exporter appends copies of the bundled arrow mesh. Strip only
+    exact trailing topology matches, and only when Studio can draw the axes.
+    Arbitrary disconnected geometry is never treated as an arrow.
+    """
+    vertices, faces = len(mesh.vertices), len(mesh.faces)
+    if separate_axes:
+        arrow_vertices, arrow_faces = _export_arrow_topology()
+        while vertices > arrow_vertices and faces > len(arrow_faces):
+            start = vertices - arrow_vertices
+            if not np.array_equal(mesh.faces[faces - len(arrow_faces):faces], arrow_faces + start):
+                break
+            # Appended arrows cannot share vertices with the actual surface.
+            if mesh.faces[:faces - len(arrow_faces)].max() >= start:
+                break
+            vertices, faces = start, faces - len(arrow_faces)
+    if vertices != len(mesh.vertices):
+        surface = trimesh.Trimesh(vertices=mesh.vertices[:vertices], faces=mesh.faces[:faces], process=False)
+        surface.visual.vertex_colors = mesh.visual.vertex_colors[:vertices].copy()
+    else:
+        surface = mesh.copy()
+    if symmetry is not None:
+        labels, count = symmetry_region_labels(surface.vertices, symmetry['symmetries_discrete'],
+            center=symmetry.get('rot_center', symmetry.get('center_ch')))
+        rgba = np.full((len(surface.vertices), 4), 255, dtype=np.uint8)
+        rgba[:, :3] = symmetry_palette(count)[labels]
+        surface.visual.vertex_colors = rgba
+    return surface
 
 
 _GEOMETRY_PROPERTIES = {

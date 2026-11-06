@@ -16,13 +16,14 @@ import vtkmodules.vtkInteractionStyle
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkPolyData, vtkCellArray, vtkImageData
 from vtkmodules.vtkFiltersCore import vtkPolyDataNormals, vtkTubeFilter
-from vtkmodules.vtkFiltersSources import vtkLineSource, vtkSphereSource
+from vtkmodules.vtkFiltersHybrid import vtkPolyDataSilhouette
+from vtkmodules.vtkFiltersSources import vtkLineSource
 from vtkmodules.vtkRenderingCore import vtkRenderer, vtkActor, vtkPolyDataMapper, vtkTexture, vtkCellPicker, vtkPointPicker, vtkWindowToImageFilter, vtkLight, vtkColorTransferFunction
 from vtkmodules.vtkRenderingAnnotation import vtkAxesActor, vtkScalarBarActor
 from vtkmodules.vtkInteractionWidgets import vtkOrientationMarkerWidget
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
 from vtkmodules.vtkIOImage import vtkPNGWriter
-from .geometry import scalar_fields, finite_range, symmetry_lines
+from .geometry import scalar_fields, finite_range, symmetry_lines, result_surface
 
 
 @dataclass
@@ -140,6 +141,9 @@ class MeshViewport(QVTKRenderWindowInteractor):
         self.result_stamp = None
         self.result_visible = False
         self.symmetry_actors = []
+        self.symmetry_outlines = []
+        self.result_symmetry = None
+        self.result_color_key = None
         self.grid_actors = []
         self.bounds = np.array([[-1., -1., -1.], [1., 1., 1.]])
         self.colors = True
@@ -250,7 +254,7 @@ class MeshViewport(QVTKRenderWindowInteractor):
 
     def set_visualization(self, path: Path | None):
         stat = path.stat() if path is not None else None
-        stamp = (stat.st_mtime_ns, stat.st_size) if stat is not None else None
+        stamp = (stat.st_mtime_ns, stat.st_size, self.result_color_key, bool(self.symmetry_actors)) if stat is not None else None
         if path is not None and path == self.result_path and stamp == self.result_stamp:
             return bool(self.result_meshes)
         for actor, _ in self.result_meshes:
@@ -266,7 +270,11 @@ class MeshViewport(QVTKRenderWindowInteractor):
                 if not isinstance(mesh, trimesh.Trimesh) or not len(mesh.faces):
                     continue
                 mesh.apply_transform(transform)
+                mesh = result_surface(mesh, separate_axes=bool(self.symmetry_actors), symmetry=self.result_symmetry)
                 actor, texture = mesh_actor(mesh)
+                actor.GetProperty().SetAmbient(.42)
+                actor.GetProperty().SetDiffuse(.58)
+                actor.GetProperty().SetSpecular(.08)
                 self.result_meshes.append((actor, texture))
                 self.renderer.AddActor(actor)
             if not self.result_meshes:
@@ -285,20 +293,12 @@ class MeshViewport(QVTKRenderWindowInteractor):
         self.coordinates.SetVisibility(enabled and bool(self.parts))
         self.render()
 
-    def _line(self, start, end, color, width=1.0, tube=False):
+    def _line(self, start, end, color):
         line = vtkLineSource()
         line.SetPoint1(*start)
         line.SetPoint2(*end)
         mapper = vtkPolyDataMapper()
-        if tube:
-            filt = vtkTubeFilter()
-            filt.SetInputConnection(line.GetOutputPort())
-            filt.SetRadius(width)
-            filt.SetNumberOfSides(12)
-            filt.CappingOn()
-            mapper.SetInputConnection(filt.GetOutputPort())
-        else:
-            mapper.SetInputConnection(line.GetOutputPort())
+        mapper.SetInputConnection(line.GetOutputPort())
         actor = vtkActor()
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(*color)
@@ -322,22 +322,66 @@ class MeshViewport(QVTKRenderWindowInteractor):
                 a[axis], b[axis] = center[axis] - extent, center[axis] + extent
                 a[1-axis] = b[1-axis] = center[1-axis] + offset
                 actor = self._line(a, b, (.87, .90, .94))
+                actor.GetProperty().SetOpacity(.35)
                 actor.SetVisibility(self.grid_visible)
                 self.grid_actors.append(actor)
 
     def set_result(self, info: dict):
-        for actor in self.symmetry_actors:
+        had_axes = bool(self.symmetry_actors)
+        for actor in self.symmetry_actors + self.symmetry_outlines:
             self.renderer.RemoveActor(actor)
         self.symmetry_actors = []
+        self.symmetry_outlines = []
         lines = symmetry_lines(info, self.bounds.mean(axis=0))
+        self.result_symmetry = self.result_color_key = None
+        if len(info.get('symmetries_discrete', [])) and not len(info.get('symmetries_continuous', [])):
+            self.result_symmetry = info
+            center = info.get('rot_center', info.get('center_ch', []))
+            self.result_color_key = (tuple(np.asarray(info['symmetries_discrete']).ravel()),
+                                     tuple(np.asarray(center).ravel()))
         size = max(float(np.max(self.bounds[1] - self.bounds[0])), 1e-6)
-        for index, (axis, center) in enumerate(lines):
-            color = (.17, .42, .84) if index == 0 else (.18, .65, .64)
-            actor = self._line(center - axis * size * .72, center + axis * size * .72,
-                               color, width=size * .0025, tube=True)
+        for axis, center in lines:
+            ends = (center - axis * size * .76, center + axis * size * .76)
+            line = vtkLineSource()
+            line.SetPoint1(*ends[0])
+            line.SetPoint2(*ends[1])
+            tube = vtkTubeFilter()
+            tube.SetInputConnection(line.GetOutputPort())
+            tube.SetRadius(size * .009)
+            tube.SetNumberOfSides(16)
+            tube.CappingOn()
+            mapper = vtkPolyDataMapper()
+            mapper.SetInputConnection(tube.GetOutputPort())
+            actor = vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(.84, .44, .08)
+            actor.GetProperty().LightingOff()
+            actor.PickableOff()
             actor.SetVisibility(self.symmetry_visible)
+            self.renderer.AddActor(actor)
             self.symmetry_actors.append(actor)
-        self.render()
+            # A light silhouette keeps the warm axes distinct even on dark textures.
+            silhouette = vtkPolyDataSilhouette()
+            silhouette.SetInputConnection(tube.GetOutputPort())
+            silhouette.SetCamera(self.renderer.GetActiveCamera())
+            silhouette.SetEnableFeatureAngle(False)
+            outline_mapper = vtkPolyDataMapper()
+            outline_mapper.SetInputConnection(silhouette.GetOutputPort())
+            outline_mapper.SetResolveCoincidentTopologyToPolygonOffset()
+            outline_mapper.SetRelativeCoincidentTopologyLineOffsetParameters(0, -2)
+            outline = vtkActor()
+            outline.SetMapper(outline_mapper)
+            outline.GetProperty().SetColor(1, 1, 1)
+            outline.GetProperty().SetLineWidth(2)
+            outline.GetProperty().LightingOff()
+            outline.PickableOff()
+            outline.SetVisibility(self.symmetry_visible)
+            self.renderer.AddActor(outline)
+            self.symmetry_outlines.append(outline)
+        if lines and not had_axes:
+            self.fit()
+        else:
+            self.render()
         return len(lines)
 
     def available_scalars(self):
@@ -444,7 +488,7 @@ class MeshViewport(QVTKRenderWindowInteractor):
 
     def set_symmetry_visible(self, enabled):
         self.symmetry_visible = bool(enabled)
-        for actor in self.symmetry_actors:
+        for actor in self.symmetry_actors + self.symmetry_outlines:
             actor.SetVisibility(enabled)
         self.render()
 
@@ -455,9 +499,14 @@ class MeshViewport(QVTKRenderWindowInteractor):
         self.render()
 
     def fit(self):
-        b = self.bounds
+        b = self.bounds.copy()
+        for actor in self.symmetry_actors:
+            if actor.GetVisibility():
+                bounds = np.asarray(actor.GetBounds()).reshape(3, 2)
+                b[0] = np.minimum(b[0], bounds[:, 0])
+                b[1] = np.maximum(b[1], bounds[:, 1])
         self.renderer.ResetCamera(b[0, 0], b[1, 0], b[0, 1], b[1, 1], b[0, 2], b[1, 2])
-        self.renderer.GetActiveCamera().Zoom(1.0)
+        self.renderer.GetActiveCamera().Zoom(1.15 if self.symmetry_visible and self.symmetry_actors else 1.0)
         self.renderer.ResetCameraClippingRange()
         self.render()
 

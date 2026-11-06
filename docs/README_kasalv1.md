@@ -81,7 +81,7 @@ If the object is unlabeled, the integrated application routes it to KASALv2 even
 
 ## Localization results
 
-KASAL estimates all axes implied by the supplied family and the shared rotation center. The visualization uses arrows for axis direction and vertex colors to distinguish symmetry order.
+KASAL estimates all axes implied by the supplied family and the shared rotation center. The visualization uses arrows for axis direction and vertex colors to distinguish representative regions under the finite symmetry group. Colors do not encode individual axis orders or confidence.
 
 <p align="center">
   <img src="../kasal/datasets/result-p20-1.png" alt="Symmetry axes and rotation center on a regular dodecahedron" width="720">
@@ -90,7 +90,7 @@ KASAL estimates all axes implied by the supplied family and the shared rotation 
 An arrow starts at the rotation center and points along its symmetry axis.
 
 <p align="center">
-  <img src="../kasal/datasets/result-p20-2.png" alt="Vertex-color visualization of rotational order" width="720">
+  <img src="../kasal/datasets/result-p20-2.png" alt="Vertex-color visualization of symmetry regions" width="720">
 </p>
 
 Results are saved as `*_sym_type.json` and, when requested, `*_sym.ply`.

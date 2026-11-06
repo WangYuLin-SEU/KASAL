@@ -81,7 +81,7 @@ KASAL 使用八个 canonical 类型：三类连续对称和五类离散对称。
 
 ## 对称轴定位结果
 
-KASAL 会估计给定对称族蕴含的全部轴以及共享旋转中心。可视化用箭头表示轴方向，并用顶点颜色区分对称阶数。
+KASAL 会估计给定对称族蕴含的全部轴以及共享旋转中心。可视化用箭头表示轴方向，并用顶点颜色区分有限对称群下的代表分区；颜色不表示单根轴的阶数或置信度。
 
 <p align="center">
   <img src="../kasal/datasets/result-p20-1.png" alt="正十二面体上的对称轴与旋转中心" width="720">
@@ -90,7 +90,7 @@ KASAL 会估计给定对称族蕴含的全部轴以及共享旋转中心。可�
 箭头从旋转中心出发，并沿对称轴方向指向。
 
 <p align="center">
-  <img src="../kasal/datasets/result-p20-2.png" alt="旋转阶数的顶点着色可视化" width="720">
+  <img src="../kasal/datasets/result-p20-2.png" alt="对称分区的顶点着色可视化" width="720">
 </p>
 
 结果保存为 `*_sym_type.json`，并可按请求写出 `*_sym.ply`。

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import colorsys
 import copy
 
 import numpy as np
@@ -36,12 +37,12 @@ def build_symmetry_visualization_model(
         return visualization_model
 
     sym_op = symmetry_info.get("sym_op")
-    rotation_center = np.asarray(symmetry_info.get("rot_center", [0, 0, 0]), dtype=np.float32).reshape(3)
+    rotation_center = np.asarray(symmetry_info.get("rot_center", [0, 0, 0]), dtype=np.float64).reshape(3)
     visualization_model["center_ch"] = rotation_center
 
     if sym_op == "symmetries_discrete" and "symmetries_discrete" in symmetry_info:
         transforms = symmetry_info["symmetries_discrete"]
-        orbit_transforms = [np.asarray(m, dtype=np.float32).reshape(4, 4) for m in transforms]
+        orbit_transforms = [np.asarray(m, dtype=np.float64).reshape(4, 4) for m in transforms]
         visualization_model["symmetries_discrete"] = transforms
         axes = symmetry_info.get("rot_sym_axis", [])
         if axes:
@@ -73,27 +74,86 @@ def apply_symmetry_orbit_colors(
     reference_point=None,
     orbit_colors=None,
 ) -> None:
-    """Write normalized RGBA orbit colors into the model.
+    """Color representative regions of the complete finite rotation group.
 
-    Missing reference points and RGB colors use the current NumPy RNG state."""
+    Identity is included for coloring only; the stored BOP transforms are unchanged.
+    Defaults are deterministic and do not consume NumPy's global random state.
+    Explicit colors must include an entry for identity when it is absent in input.
+    """
+    labels, count = symmetry_region_labels(
+        visualization_model['vertices'], orbit_transforms,
+        center=visualization_model.get('center_ch'), reference_point=reference_point,
+    )
+    palette = symmetry_palette(count) if orbit_colors is None else np.asarray(orbit_colors)
+    if palette.shape != (count, 3) or not np.isfinite(palette).all() or np.any((palette < 0) | (palette > 255)):
+        raise ValueError('Orbit colors must contain one RGB triplet per group element, including identity.')
+    rgba = np.full((len(labels), 4), 255, dtype=np.uint8)
+    rgba[:, :3] = palette[labels]
+    visualization_model['sym_colors'] = rgba.astype(np.float32) / 255
 
+
+def symmetry_palette(count: int) -> np.ndarray:
+    """A deterministic cool palette with distinct *quantized* RGB entries."""
+    colors, used = [], set()
+    index = 0
+    while len(colors) < count:
+        rgb = colorsys.hls_to_rgb(.44 + .32 * ((index * .61803398875) % 1),
+                                 .62 + .18 * ((index * .569840291) % 1),
+                                 .32 + .16 * ((index * .754877666) % 1))
+        color = tuple(np.rint(np.asarray(rgb) * 255).astype(int))
+        if color not in used:
+            colors.append(color)
+            used.add(color)
+        index += 1
+    return np.asarray(colors, dtype=np.uint8).reshape(-1, 3)
+
+
+def symmetry_region_labels(vertices, transforms, *, center=None, reference_point=None):
+    """Return a transform index per vertex and the full group size.
+
+    Each region consists of points whose chosen symmetry transform brings them
+    closest to a reference point. This is a representative-region visualization,
+    not a confidence map or a claim that equally colored points share one orbit.
+    """
+    vertices = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    matrices = np.asarray(transforms, dtype=np.float64).reshape(-1, 4, 4)
+    if not len(vertices) or not np.isfinite(vertices).all() or not np.isfinite(matrices).all():
+        raise ValueError('Symmetry coloring requires finite vertices and transforms.')
+    if not any(np.allclose(matrix, np.eye(4), rtol=0, atol=1e-8) for matrix in matrices):
+        matrices = np.concatenate((np.eye(4)[None], matrices))
+    center = (vertices.min(axis=0) + vertices.max(axis=0)) / 2 if center is None else np.asarray(center, dtype=float).reshape(3)
+    if not np.isfinite(center).all():
+        raise ValueError('Symmetry coloring requires a finite rotation center.')
+    scale = max(float(np.ptp(vertices, axis=0).max()), 1e-12)
+    points = (vertices - center) / scale
+    rotations = matrices[:, :3, :3]
+    offsets = (np.einsum('nij,j->ni', rotations, center) + matrices[:, :3, 3] - center) / scale
     if reference_point is None:
-        reference_point = np.random.uniform(0, 1, 3)
-    vertices = visualization_model["vertices"]
-    transformed_offsets = []
-    for transform in orbit_transforms:
-        transformed_offsets.append(
-            np.dot(transform[:3, :3], vertices.T).T
-            + transform[:3, 3]
-            - reference_point
-        )
-    transformed_offsets = np.array(transformed_offsets)
-    orbit_distances = np.linalg.norm(transformed_offsets, axis=2)
-    nearest_orbit = np.argmin(orbit_distances, axis=0)
-    if orbit_colors is None:
-        orbit_colors = np.random.randint(0, 255, (len(orbit_transforms), 3)).astype(int)
-    vertex_colors = np.zeros((visualization_model["colors"].shape[0], 4))
-    for i, orbit_color in enumerate(orbit_colors):
-        vertex_colors[nearest_orbit == i, :3] = orbit_color
-    vertex_colors[:, 3] = 255
-    visualization_model["sym_colors"] = vertex_colors.astype(np.float32) / 255
+        # Fixed sphere samples avoid a reference on an axis. Maximize separation
+        # of its transformed copies; normalized coordinates preserve scale/shift.
+        reference, best_gap = np.array([1., 0., 0.]), -1.
+        if len(matrices) > 1:
+            for index in range(32):
+                z = 1 - 2 * (index + .5) / 32
+                angle = index * np.pi * (3 - np.sqrt(5))
+                candidate = np.array([np.sqrt(1 - z*z) * np.cos(angle),
+                                      np.sqrt(1 - z*z) * np.sin(angle), z])
+                orbit = np.einsum('nij,j->ni', rotations, candidate) + offsets
+                distances = np.sum((orbit[:, None] - orbit[None, :]) ** 2, axis=2)
+                np.fill_diagonal(distances, np.inf)
+                gap = float(distances.min())
+                if gap > best_gap + 1e-10:
+                    reference, best_gap = candidate, gap
+    else:
+        reference = (np.asarray(reference_point, dtype=float).reshape(3) - center) / scale
+        if not np.isfinite(reference).all():
+            raise ValueError('The coloring reference point must be finite.')
+    # Keep O(vertex_count) memory instead of stacking every transformed mesh.
+    labels = np.zeros(len(points), dtype=np.int64)
+    nearest = np.full(len(points), np.inf)
+    for index, (rotation, offset) in enumerate(zip(rotations, offsets)):
+        delta = points @ rotation.T + offset - reference
+        distance = np.einsum('ij,ij->i', delta, delta)
+        closer = distance < nearest
+        labels[closer], nearest[closer] = index, distance[closer]
+    return labels, len(matrices)
