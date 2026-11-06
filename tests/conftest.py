@@ -5,9 +5,21 @@ import pytest
 import kasal.config.runtime as config
 
 
+def pytest_addoption(parser):
+    parser.addoption('--desktop', action='store_true',
+                     help='Include real Qt/VTK windows and v2 worker workflows.')
+
+
+def pytest_ignore_collect(collection_path, config):
+    # Keep the base-only CI runnable without importing optional desktop libraries.
+    if collection_path.name == 'desktop' and not config.getoption('--desktop'):
+        return True
+    return None
+
+
 @pytest.fixture(autouse=True)
 def runtime_state(monkeypatch):
-    """Keep CLI, annotation and GUI workflows independent of test order."""
+    """Keep workflows independent of runtime globals and the host's GPU selection."""
     for name in (
         "mesh_paths", "current_mesh_index", "settings_path", "annotation_dirty",
         "annotation_load_errors", "selected_symmetry_type", "selected_n_fold",
@@ -35,37 +47,21 @@ def colored_mesh(tmp_path):
 
 @pytest.fixture
 def v2_analysis(monkeypatch):
-    """Replace only the expensive v2 search; retain real mesh I/O and export."""
+    """Keep base-only batch CI fast; desktop tests use the real v2 worker."""
     import sys
-    from types import ModuleType, SimpleNamespace
-
-    result = SimpleNamespace(
-        raw={
-            "has_rot_sym": True,
-            "rot_sym_type": "D(=1): n-fold Pyramidal Item",
-            "sym_op": "symmetries_discrete",
-            "rot_sym_axis": [[0, 0, 1], [0, 0, -1]],
-            "symmetries_discrete": [
-                [0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-                [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-                [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            ],
-        },
-        n_fold=4,
-        error=None,
-        config=None,
-    )
+    from types import ModuleType
 
     def analyze(model_input, tex, config):
-        if result.error is not None:
-            raise result.error
-        assert model_input["analysis_points"].shape[1] == 3
-        if tex:
-            assert model_input["analysis_colors"].shape == model_input["analysis_points"].shape
-        result.config = config
-        return result.raw, result.n_fold
+        return {
+            'has_rot_sym': True,
+            'rot_sym_type': 'D(=1): n-fold Pyramidal Item',
+            'sym_op': 'symmetries_discrete',
+            'rot_sym_axis': [[0, 0, 1]],
+            'symmetries_discrete': [
+                [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            ],
+        }, 2
 
     module = ModuleType("kasal.rotational_symmetry.analyzer")
     module.analyze_rotational_symmetry = analyze
     monkeypatch.setitem(sys.modules, module.__name__, module)
-    return result

@@ -56,6 +56,7 @@ dependencies = {file = ["requirements/base.txt", "requirements/gui.txt"]}
 
 [tool.setuptools.package-data]
 kasal = ["jobs/*.json"]
+"kasal.studio" = ["assets/*.svg"]
 "kasal.datasets" = [
     "arrow.ply", "arrow_xyz.ply", "K4.ico", "K4.png",
     "shape_meshes/*.ply",

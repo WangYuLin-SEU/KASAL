@@ -12,6 +12,7 @@ The root `requirements.txt` is the plain-pip entry point for `full-cpu`.
 | `torch-gpu.txt` | CUDA 11.8 builds of the same torch stack |
 | `torch-common.txt` | Shared PyTorch3D index and dependency bounds; included by both torch profiles |
 | `gui.txt` | PyMeshLab, Polyscope 2.6.1, OpenCV, and platform GUI helpers |
+| `studio.txt` | Optional KASAL Studio window: PySide6 and VTK |
 | `test.txt` | Pytest for contributors and CI; install a runtime profile first |
 
 `torch-cpu.txt` and `torch-gpu.txt` are mutually exclusive.
@@ -64,19 +65,34 @@ python -m pytest tests -q
 If a runtime profile is already installed, add only the runner with
 `python scripts/install_deps.py test`.
 
-The suite prioritizes file-to-result workflows: a real CPU kasalv1 job, CLI and
-dataset exports, annotation reload/edit/save, and STEP parsing through axis
-inference. The v2 workflow tests replace only the expensive symmetry search;
-mesh preprocessing and JSON/PLY output use the real implementations. GUI tests
-replace native window libraries and worker processes. Format rejection, device
-selection and failed writes retain small boundary checks where a successful
-workflow cannot establish the contract.
+The maintenance suite keeps six headless tests: two public CLI workflows,
+STEP-to-axis inference, and three data-loss guards for JSON writes, Studio commits
+and exports. The job CLI runs real CPU kasalv1; the dataset test substitutes only
+the expensive v2 search and retains real mesh loading and export.
 
-Run individual files for affected areas, for example
-`python -m pytest tests/test_cli_run_job.py tests/test_annotation_state.py -q`.
-The default suite does not validate full v2 classification accuracy, CUDA kernels,
-or interactive window rendering. Use `scripts/verify_pytorch3d.py` in the selected
-CPU/GPU environment for the real operator smoke check.
+With the algorithm runtime and `requirements/studio.txt` installed, include the
+two native desktop workflows (eight tests total; a graphical desktop is required):
+
+```bash
+python -m pytest tests --desktop -q
+```
+
+These workflows cover real v2/texture workers, batch/cancel/export/clear, and
+point-cloud viewing, scalars, orbit, language/draft persistence and manual labeling.
+Run only these workflows with `python -m pytest tests/desktop --desktop -q`.
+Missing desktop dependencies fail collection when explicitly requested; the
+default base-only CI does not import them. Temporary meshes and preferences use
+pytest's temporary directories. An optional report can be written with
+`--junitxml=.local/studio/test-results.xml`.
+
+Extend these workflows when maintaining the project. Avoid separate unit checks
+for behavior they already exercise; keep fault injection only for data-loss risks.
+One-off reproductions, exhaustive input variations, legacy GUI substitutes and
+detailed rendering checks are intentionally outside the permanent suite.
+
+These tests do not establish classification accuracy across all symmetry families
+or exercise every CUDA kernel. Keep `scripts/verify_pytorch3d.py` for installation
+diagnosis and the independent CPU/GPU operator smoke check.
 
 ## Notes
 

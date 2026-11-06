@@ -18,6 +18,7 @@ imgui.ini
 .polyscope.ini
 KASAL.json
 KASAL_batch.log
+.kasal-studio/
 *_sym.ply
 *_sym_type.json
 

@@ -22,8 +22,8 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -r requirements/base.txt -r requirements/test.txt
       - name: Compile Python sources
-        run: python -m compileall -q kasal scripts demo_shape_meshes.py demo_texture_meshes.py
-      - name: Run regression tests
+        run: python -m compileall -q kasal scripts demo_shape_meshes.py demo_texture_meshes.py demo_studio.py
+      - name: Run maintenance tests
         run: python -m pytest tests -q -p no:cacheprovider
 
   pytorch3d-smoke:
